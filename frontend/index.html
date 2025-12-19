@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Track and schedule hygiene maintenance for your musical instruments">
+    <meta name="theme-color" content="#2C5530">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    
+    <title>Instrument Hygiene Tracker</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1>🎵 Instrument Hygiene</h1>
+            <button id="install-btn" class="install-btn" style="display: none;">
+                Install App
+            </button>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="app-nav">
+            <button class="nav-btn active" data-view="calendar">Calendar</button>
+            <button class="nav-btn" data-view="tasks">Tasks</button>
+            <button class="nav-btn" data-view="equipment">Equipment</button>
+            <button class="nav-btn" data-view="analytics">Analytics</button>
+            <button class="nav-btn" data-view="signin">Sign In</button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Status Indicator -->
+            <div id="status" class="status-indicator">
+                <span id="status-text">Connecting...</span>
+            </div>
+
+            <!-- Sign In / Create Account View -->
+            <div id="signin-view" class="view">
+                <div class="auth-container">
+                    <div class="auth-card">
+                        <h2 id="auth-title">Sign In</h2>
+                        <form id="signin-form">
+                            <div class="form-group">
+                                <label for="signin-email">Email</label>
+                                <input type="email" id="signin-email" placeholder="Enter your email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signin-password">Password</label>
+                                <input type="password" id="signin-password" placeholder="Enter your password" required>
+                            </div>
+                            <button type="submit" class="btn btn-signin">Sign In</button>
+                        </form>
+                        <p class="auth-switch">
+                            Don't have an account? <a href="#" id="switch-to-signup">Create Account</a>
+                        </p>
+                    </div>
+
+                    <div class="auth-card" id="signup-card" style="display: none;">
+                        <h2 id="auth-title-signup">Create Account</h2>
+                        <form id="signup-form">
+                            <div class="form-group">
+                                <label for="signup-name">Name</label>
+                                <input type="text" id="signup-name" placeholder="Enter your name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-email">Email</label>
+                                <input type="email" id="signup-email" placeholder="Enter your email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password">Password</label>
+                                <input type="password" id="signup-password" placeholder="Enter your password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password-confirm">Confirm Password</label>
+                                <input type="password" id="signup-password-confirm" placeholder="Confirm your password" required>
+                            </div>
+                            <button type="submit" class="btn btn-signup">Sign Up</button>
+                        </form>
+                        <p class="auth-switch">
+                            <a href="#" id="switch-to-signin">Return to Login</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar View -->
+            <div id="calendar-view" class="view active">
+                <div class="calendar-header">
+                    <button id="prev-month" class="btn-icon">←</button>
+                    <h2 id="current-month"></h2>
+                    <button id="next-month" class="btn-icon">→</button>
+                </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
+                <div id="selected-date-tasks" class="selected-date-tasks"></div>
+            </div>
+
+            <!-- Tasks View -->
+            <div id="tasks-view" class="view">
+                <div class="task-tabs">
+                    <button class="task-tab active" data-filter="today">Today</button>
+                    <button class="task-tab" data-filter="tomorrow">Tomorrow</button>
+                    <button class="task-tab" data-filter="overdue">Overdue</button>
+                </div>
+                <div id="tasks-list" class="tasks-list"></div>
+            </div>
+
+            <!-- Equipment View -->
+            <div id="equipment-view" class="view">
+                <button id="add-equipment-btn" class="btn btn-primary">+ Add Equipment</button>
+                <div id="equipment-list" class="equipment-list"></div>
+            </div>
+
+            <!-- Analytics View -->
+            <div id="analytics-view" class="view">
+                <div class="analytics-section">
+                    <h3>Completion Streak</h3>
+                    <div class="streak-display" id="streak-display">0 days</div>
+                </div>
+                <div class="analytics-section">
+                    <h3>Completion Rate</h3>
+                    <div id="completion-rate"></div>
+                </div>
+                <div class="analytics-section">
+                    <h3>Equipment Scores</h3>
+                    <div id="equipment-scores"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p class="offline-indicator" id="offline-indicator" style="display: none;">
+                ⚠️ Offline Mode
+            </p>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Equipment Modal -->
+    <div id="equipment-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="equipment-modal-title">Add Equipment</h2>
+            <form id="equipment-form">
+                <input type="text" id="equipment-name" placeholder="Equipment name" required>
+                <select id="equipment-category" required>
+                    <option value="">Select category...</option>
+                    <option value="Woodwind">Woodwind</option>
+                    <option value="Brass">Brass</option>
+                    <option value="Plucked string">Plucked string</option>
+                    <option value="Bowed string">Bowed string</option>
+                    <option value="Percussion">Percussion</option>
+                    <option value="Storage/Case">Storage/Case</option>
+                    <option value="Other">Other</option>
+                </select>
+                <textarea id="equipment-notes" placeholder="Notes (optional)" rows="3"></textarea>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Task Definition Modal -->
+    <div id="task-def-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Add Hygiene Task</h2>
+            <form id="task-def-form">
+                <select id="task-equipment" required>
+                    <option value="">Select equipment...</option>
+                </select>
+                <select id="task-type" required>
+                    <option value="">Select task type...</option>
+                    <option value="Cleaning">Cleaning</option>
+                    <option value="Drying">Drying</option>
+                    <option value="Disinfecting">Disinfecting</option>
+                    <option value="Other">Other</option>
+                </select>
+                <div class="form-row">
+                    <select id="task-frequency-type" required>
+                        <option value="days">Every N days</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                    <input type="number" id="task-frequency-value" placeholder="N" value="1" min="1" required>
+                </div>
+                <input type="date" id="task-start-date" required>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Complete Task Modal -->
+    <div id="complete-task-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Complete Task</h2>
+            <form id="complete-task-form">
+                <div id="complete-task-info"></div>
+                <textarea id="complete-task-notes" placeholder="Notes (optional)" rows="3"></textarea>
+                <input type="file" id="complete-task-photo" accept="image/*">
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Mark Complete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Service Worker Registration -->
+    <script src="/app.js"></script>
+    <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Install button handler
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'block';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response: ${outcome}`);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

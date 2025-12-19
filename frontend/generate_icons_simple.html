@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Icons</title>
+</head>
+<body>
+    <h1>Icon Generator</h1>
+    <p>Open browser console (F12) and run the JavaScript below to generate icons:</p>
+    <pre id="code"></pre>
+    <canvas id="canvas" style="display:none;"></canvas>
+    
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        const color = '#2C5530'; // Dark green theme
+        
+        const code = `
+// Run this in browser console on this page:
+const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+const color = '#2C5530';
+
+sizes.forEach(size => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    
+    // Fill with theme color
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, size, size);
+    
+    // Add white "M" for Music
+    ctx.fillStyle = 'white';
+    ctx.font = \`bold \${size/3}px Arial\`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('M', size/2, size/2);
+    
+    // Download
+    canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = \`icon-\${size}x\${size}.png\`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+});
+        `;
+        
+        document.getElementById('code').textContent = code;
+    </script>
+</body>
+</html>
+

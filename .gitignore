@@ -1,0 +1,104 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+conda-meta/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database files (development databases should not be committed)
+*.db
+*.sqlite
+*.sqlite3
+hygiene_tracker.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Project-specific
+# Development scripts (optional - uncomment if you don't want to track these)
+# frontend/CREATE_ICONS.bat
+# frontend/create_icons.py
+# frontend/create_minimal_icons.py
+# frontend/create_placeholder_icons.py
+# frontend/generate_icons_simple.html
+
+# Icon files (if you want placeholder icons tracked, comment this out)
+# For now, keeping icons directory but not generated PNGs
+# frontend/icons/*.png
+
+# Documentation/book files (large files - exclude if not needed)
+# books/
+*.pdf
+*.docx
+*.zip
+
+# Old project folders
+IMM_Hygiene App/
+START_FRONTEND.md
+START_HERE.md
+
+# Node modules (if you add Node.js tools later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Service Worker cache
+service-worker-cache/
+
+# Build outputs
+dist/
+build/
