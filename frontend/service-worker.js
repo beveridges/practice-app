@@ -3,7 +3,7 @@
  * Handles offline caching and app installation
  */
 
-const CACHE_NAME = 'pwa-app-v1';
+const CACHE_NAME = 'pwa-app-v2'; // Increment version to clear old cache
 const API_CACHE_NAME = 'pwa-api-v1';
 
 // Files to cache on install
@@ -56,13 +56,14 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
     
-    // Skip non-GET requests
-    if (request.method !== 'GET') {
-        return;
-    }
-    
     // API requests - network first, cache fallback
-    if (url.pathname.startsWith('/api/')) {
+    // Allow all HTTP methods (GET, POST, PUT, DELETE) to pass through
+    if (url.pathname.startsWith('/api/') || url.hostname === 'localhost' && url.port === '8000') {
+        // For API requests, always go to network (don't cache POST/PUT/DELETE)
+        if (request.method !== 'GET') {
+            // Let POST/PUT/DELETE requests pass through to network
+            return;
+        }
         event.respondWith(
             fetch(request)
                 .then((response) => {
@@ -105,11 +106,55 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
-    // Static assets - cache first, network fallback
+    // HTML files - network first (always get latest), cache fallback for offline
+    if (url.pathname === '/' || url.pathname.endsWith('.html')) {
+        event.respondWith(
+            fetch(request)
+                .then((networkResponse) => {
+                    // If network request succeeds, cache it and return
+                    if (networkResponse && networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME)
+                            .then((cache) => {
+                                cache.put(request, responseToCache);
+                            });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => {
+                    // Network failed, try cache for offline support
+                    return caches.match(request)
+                        .then((cachedResponse) => {
+                            if (cachedResponse) {
+                                return cachedResponse;
+                            }
+                            // Last resort: return cached index.html for navigation
+                            if (request.mode === 'navigate') {
+                                return caches.match('/index.html');
+                            }
+                        });
+                })
+        );
+        return;
+    }
+    
+    // Other static assets (CSS, JS, images) - cache first, network fallback
     event.respondWith(
         caches.match(request)
             .then((cachedResponse) => {
                 if (cachedResponse) {
+                    // Also check network in background to update cache
+                    fetch(request).then((networkResponse) => {
+                        if (networkResponse && networkResponse.status === 200) {
+                            const responseToCache = networkResponse.clone();
+                            caches.open(CACHE_NAME)
+                                .then((cache) => {
+                                    cache.put(request, responseToCache);
+                                });
+                        }
+                    }).catch(() => {
+                        // Network failed, that's OK - use cached version
+                    });
                     return cachedResponse;
                 }
                 

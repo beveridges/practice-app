@@ -21,8 +21,10 @@ from database import (
     init_db, get_db, Base, engine, Equipment as DBEquipment, TaskDefinition as DBTaskDefinition,
     TaskOccurrence as DBTaskOccurrence, TaskCompletion as DBTaskCompletion, UserProfile as DBUserProfile
 )
+from instrument_list import get_instruments_list
 from db_viewer import router as db_viewer_router
 from uuid_utils import generate_uuid
+from auth_utils import hash_password, verify_password
 
 app = FastAPI(title="Instrument Hygiene Tracking API", version="1.0.0")
 
@@ -32,27 +34,12 @@ app.include_router(db_viewer_router)
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
-    # Drop all tables and recreate (for development - removes old schema)
-    # In production, use proper migrations instead
-    Base.metadata.drop_all(bind=engine)
+    # Create tables if they don't exist (preserves existing data)
+    # This allows multiple users to be added to the database
     init_db()
+    print("✓ Database initialized (tables created if needed)")
     
-    # Initialize default user profile if it doesn't exist
-    db = next(get_db())
-    try:
-        profile = db.query(DBUserProfile).first()
-        if not profile:
-            default_profile = DBUserProfile(
-                id=generate_uuid(),
-                name="Default User",
-                biography=None,
-                reminder_hours=24,
-                notifications_enabled=True
-            )
-            db.add(default_profile)
-            db.commit()
-    finally:
-        db.close()
+    # Note: For schema changes/migrations in the future, use proper migration tools like Alembic
 
 # CORS middleware - allow frontend to access API
 app.add_middleware(
@@ -88,20 +75,33 @@ class FrequencyType(str, Enum):
     WEEKLY = "weekly"
     MONTHLY = "monthly"
 
+class Gender(str, Enum):
+    MALE = "Male"
+    FEMALE = "Female"
+    NON_BINARY = "Non-binary"
+    PREFER_NOT_TO_SAY = "Prefer not to say"
+
+# Instrument type enum
+class InstrumentType(str, Enum):
+    PRIMARY = "Primary"
+    SECONDARY = "Secondary"
+
 # Data models
 class Equipment(BaseModel):
     id: Optional[str] = None  # UUID
     user_profile_id: Optional[str] = None  # UUID
     name: str
     category: EquipmentCategory
+    instrument_type: InstrumentType = InstrumentType.PRIMARY  # Primary or Secondary
     notes: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
 class EquipmentCreate(BaseModel):
-    user_profile_id: Optional[str] = None  # UUID
+    user_profile_id: str  # UUID - required
     name: str
     category: EquipmentCategory
+    instrument_type: InstrumentType = InstrumentType.PRIMARY  # Primary or Secondary
     notes: Optional[str] = None
 
 class TaskDefinition(BaseModel):
@@ -141,6 +141,14 @@ class UserProfile(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     name: str
+    date_of_birth: Optional[str] = None  # ISO format date string
+    gender: Optional[str] = None  # String value (e.g., "Male", "Female", "Non-binary", "Prefer not to say")
+    primary_instrument: Optional[str] = None
+    age_commenced_playing: Optional[int] = None
+    secondary_instruments: Optional[str] = None  # Comma-separated list
+    daily_practice_hours: Optional[float] = None
+    days_per_week_practising: Optional[int] = None
+    practice_routine_description: Optional[str] = None
     biography: Optional[str] = None
     reminder_hours: Optional[int] = 24  # Hours before due time
     notifications_enabled: bool = True
@@ -151,6 +159,14 @@ class UserProfileCreate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     name: str
+    date_of_birth: Optional[str] = None  # ISO format date string
+    gender: Optional[Gender] = None
+    primary_instrument: Optional[str] = None
+    age_commenced_playing: Optional[int] = None
+    secondary_instruments: Optional[str] = None  # Comma-separated list
+    daily_practice_hours: Optional[float] = None
+    days_per_week_practising: Optional[int] = None
+    practice_routine_description: Optional[str] = None
     biography: Optional[str] = None
     reminder_hours: Optional[int] = 24
     notifications_enabled: bool = True
@@ -159,18 +175,44 @@ class UserProfileUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     name: Optional[str] = None
+    date_of_birth: Optional[str] = None  # ISO format date string
+    gender: Optional[str] = None  # Accept string, convert to enum in endpoint
+    primary_instrument: Optional[str] = None
+    age_commenced_playing: Optional[int] = None
+    secondary_instruments: Optional[str] = None  # Comma-separated list
+    daily_practice_hours: Optional[float] = None
+    days_per_week_practising: Optional[int] = None
+    practice_routine_description: Optional[str] = None
     biography: Optional[str] = None
     reminder_hours: Optional[int] = None
     notifications_enabled: Optional[bool] = None
 
+# Authentication models
+class SignUpRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class SignInRequest(BaseModel):
+    email: str
+    password: str
+
+class AuthResponse(BaseModel):
+    user_id: str
+    name: str
+    email: Optional[str] = None
+    username: Optional[str] = None
+    message: str = "Success"
+
 # Helper functions
 def db_equipment_to_pydantic(db_equipment: DBEquipment) -> Equipment:
-    """Convert database Equipment to Pydantic model"""
+    """Convert database Equipment model to Pydantic Equipment model"""
     return Equipment(
         id=db_equipment.id,
         user_profile_id=db_equipment.user_profile_id,
         name=db_equipment.name,
         category=db_equipment.category,
+        instrument_type=InstrumentType(db_equipment.instrument_type) if db_equipment.instrument_type else InstrumentType.PRIMARY,
         notes=db_equipment.notes,
         created_at=db_equipment.created_at.isoformat() if db_equipment.created_at else None,
         updated_at=db_equipment.updated_at.isoformat() if db_equipment.updated_at else None
@@ -204,11 +246,25 @@ def db_task_occurrence_to_pydantic(db_task_occ: DBTaskOccurrence) -> TaskOccurre
 
 def db_user_profile_to_pydantic(db_profile: DBUserProfile) -> UserProfile:
     """Convert database UserProfile to Pydantic model"""
+    # Convert gender: return string value directly (frontend expects string)
+    gender_value = None
+    if db_profile.gender:
+        # Return as string, not enum
+        gender_value = db_profile.gender
+    
     return UserProfile(
         id=db_profile.id,
         username=db_profile.username,
         email=db_profile.email,
         name=db_profile.name,
+        date_of_birth=db_profile.date_of_birth.isoformat() if db_profile.date_of_birth else None,
+        gender=gender_value,
+        primary_instrument=db_profile.primary_instrument,
+        age_commenced_playing=db_profile.age_commenced_playing,
+        secondary_instruments=db_profile.secondary_instruments,
+        daily_practice_hours=db_profile.daily_practice_hours,
+        days_per_week_practising=db_profile.days_per_week_practising,
+        practice_routine_description=db_profile.practice_routine_description,
         biography=db_profile.biography,
         reminder_hours=db_profile.reminder_hours,
         notifications_enabled=db_profile.notifications_enabled,
@@ -339,11 +395,11 @@ async def health_check():
 
 # Equipment endpoints
 @app.get("/api/equipment", response_model=List[Equipment])
-async def get_equipment(db: Session = Depends(get_db), user_profile_id: Optional[str] = None):
-    """Get all equipment, optionally filtered by user_profile_id"""
+async def get_equipment(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get equipment - optionally filtered by user_id"""
     query = db.query(DBEquipment)
-    if user_profile_id:
-        query = query.filter(DBEquipment.user_profile_id == user_profile_id)
+    if user_id:
+        query = query.filter(DBEquipment.user_profile_id == user_id)
     db_equipment = query.all()
     return [db_equipment_to_pydantic(eq) for eq in db_equipment]
 
@@ -357,12 +413,21 @@ async def get_equipment_item(equipment_id: str, db: Session = Depends(get_db)):
 
 @app.post("/api/equipment", response_model=Equipment)
 async def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
-    """Create new equipment"""
+    """Create new equipment - requires user_profile_id"""
+    if not equipment.user_profile_id:
+        raise HTTPException(status_code=400, detail="user_profile_id is required")
+    
+    # Verify user exists
+    user = db.query(DBUserProfile).filter(DBUserProfile.id == equipment.user_profile_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
     new_equipment = DBEquipment(
         id=generate_uuid(),
         user_profile_id=equipment.user_profile_id,
         name=equipment.name,
         category=equipment.category,
+        instrument_type=equipment.instrument_type.value if isinstance(equipment.instrument_type, InstrumentType) else equipment.instrument_type,
         notes=equipment.notes
     )
     db.add(new_equipment)
@@ -379,8 +444,9 @@ async def update_equipment(equipment_id: str, equipment: EquipmentCreate, db: Se
     
     existing.name = equipment.name
     existing.category = equipment.category
+    existing.instrument_type = equipment.instrument_type.value if isinstance(equipment.instrument_type, InstrumentType) else equipment.instrument_type
     existing.notes = equipment.notes
-    if equipment.user_profile_id is not None:
+    if equipment.user_profile_id:
         existing.user_profile_id = equipment.user_profile_id
     existing.updated_at = datetime.utcnow()
     
@@ -580,7 +646,7 @@ async def complete_all_tasks_for_equipment(equipment_id: str, db: Session = Depe
         )
         db.add(task_completion)
         completed.append(task)
-    
+        
     db.commit()
     for task in completed:
         db.refresh(task)
@@ -657,15 +723,109 @@ async def get_task_breakdown(db: Session = Depends(get_db)):
     
     return breakdown
 
+# Instruments endpoint
+@app.get("/api/instruments")
+async def get_instruments():
+    """Get comprehensive list of musical instruments for dropdowns"""
+    return {"instruments": get_instruments_list()}
+
+# Authentication endpoints
+@app.post("/api/auth/signup", response_model=AuthResponse)
+async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
+    """Create a new user account"""
+    # Check if email already exists
+    existing = db.query(DBUserProfile).filter(DBUserProfile.email == request.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create new user profile with hashed password
+    new_profile = DBUserProfile(
+        id=generate_uuid(),
+        email=request.email,
+        name=request.name,
+        password_hash=hash_password(request.password),
+        reminder_hours=24,
+        notifications_enabled=True
+    )
+    db.add(new_profile)
+    db.commit()
+    db.refresh(new_profile)
+    
+    return AuthResponse(
+        user_id=new_profile.id,
+        name=new_profile.name,
+        email=new_profile.email,
+        message="Account created successfully"
+    )
+
+@app.post("/api/auth/signin", response_model=AuthResponse)
+async def signin(request: SignInRequest, db: Session = Depends(get_db)):
+    """Sign in with email and password"""
+    # Find user by email
+    user = db.query(DBUserProfile).filter(DBUserProfile.email == request.email).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password
+    if not user.password_hash or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    return AuthResponse(
+        user_id=user.id,
+        name=user.name,
+        email=user.email,
+        username=user.username,
+        message="Signed in successfully"
+    )
+
+@app.get("/api/auth/current-user")
+async def get_current_user(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get current user profile by user_id"""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID required")
+    
+    user = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "user_id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "username": user.username
+    }
+
 # Profile endpoints
 @app.post("/api/profile", response_model=UserProfile)
 async def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     """Create a new user profile"""
+    # Parse date_of_birth if provided
+    dob = None
+    if profile.date_of_birth:
+        try:
+            # Handle both YYYY-MM-DD format and ISO format
+            if len(profile.date_of_birth) == 10:  # YYYY-MM-DD format
+                dob = date.fromisoformat(profile.date_of_birth)
+            else:
+                dob = datetime.fromisoformat(profile.date_of_birth.replace('Z', '+00:00')).date()
+        except Exception as e:
+            print(f"Error parsing date_of_birth: {e}")
+            dob = None
+    
     new_profile = DBUserProfile(
         id=generate_uuid(),
         username=profile.username,
         email=profile.email,
         name=profile.name,
+        date_of_birth=dob,
+        gender=profile.gender.value if profile.gender else None,
+        primary_instrument=profile.primary_instrument,
+        age_commenced_playing=profile.age_commenced_playing,
+        secondary_instruments=profile.secondary_instruments,
+        daily_practice_hours=profile.daily_practice_hours,
+        days_per_week_practising=profile.days_per_week_practising,
+        practice_routine_description=profile.practice_routine_description,
         biography=profile.biography,
         reminder_hours=profile.reminder_hours,
         notifications_enabled=profile.notifications_enabled
@@ -676,39 +836,118 @@ async def create_profile(profile: UserProfileCreate, db: Session = Depends(get_d
     return db_user_profile_to_pydantic(new_profile)
 
 @app.get("/api/profile")
-async def get_profile(db: Session = Depends(get_db)):
-    """Get user profile (returns first profile, or creates default if none exists)"""
-    profile = db.query(DBUserProfile).first()
+async def get_profile(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get user profile by user_id"""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    
+    profile = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
     if not profile:
-        # Create default profile
-        profile = DBUserProfile(
-            id=generate_uuid(),
-            name="Default User",
-            reminder_hours=24,
-            notifications_enabled=True
-        )
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
     return db_user_profile_to_pydantic(profile)
 
 @app.put("/api/profile")
-async def update_profile(profile: UserProfileUpdate, db: Session = Depends(get_db)):
-    """Update user profile"""
-    existing = db.query(DBUserProfile).first()
-    if not existing:
-        raise HTTPException(status_code=404, detail="Profile not found")
+async def update_profile(profile: UserProfileUpdate, user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Update user profile - requires user_id"""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
     
+    existing = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
+    if not existing:
+        # Provide more helpful error message
+        all_users = db.query(DBUserProfile).all()
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Profile not found for user_id: {user_id}. Database may have been reset. Please sign up again. (Found {len(all_users)} users in database)"
+        )
+    
+    # Update all fields - frontend sends all fields, so update them all
+    # Handle username (optional, not in profile form currently)
     if profile.username is not None:
-        existing.username = profile.username
+        existing.username = profile.username.strip() if isinstance(profile.username, str) and profile.username.strip() else None
+    
+    # Update email
     if profile.email is not None:
-        existing.email = profile.email
+        existing.email = profile.email.strip() if isinstance(profile.email, str) and profile.email.strip() else None
+    
+    # Update name (required field)
     if profile.name is not None:
-        existing.name = profile.name
+        name_str = profile.name.strip() if isinstance(profile.name, str) else str(profile.name)
+        if name_str:  # Only update if non-empty
+            existing.name = name_str
+    
+    # Update date_of_birth (handle empty string or None)
+    if profile.date_of_birth is not None:
+        dob_str = profile.date_of_birth.strip() if isinstance(profile.date_of_birth, str) else str(profile.date_of_birth)
+        if dob_str:
+            try:
+                # Handle both YYYY-MM-DD format and ISO format
+                if len(dob_str) == 10:  # YYYY-MM-DD format
+                    existing.date_of_birth = date.fromisoformat(dob_str)
+                else:
+                    existing.date_of_birth = datetime.fromisoformat(dob_str.replace('Z', '+00:00')).date()
+            except Exception as e:
+                print(f"Error parsing date_of_birth '{profile.date_of_birth}': {e}")
+                # Keep existing date if parsing fails
+        else:
+            # Empty string - clear the date
+            existing.date_of_birth = None
+    
+    # Update gender
+    if profile.gender is not None:
+        if isinstance(profile.gender, Gender):
+            existing.gender = profile.gender.value
+        elif isinstance(profile.gender, str):
+            gender_str = profile.gender.strip()
+            if gender_str and gender_str in [g.value for g in Gender]:
+                existing.gender = gender_str
+            else:
+                existing.gender = None
+        else:
+            existing.gender = None
+    else:
+        existing.gender = None
+    
+    # Update primary_instrument
+    if profile.primary_instrument is not None:
+        existing.primary_instrument = profile.primary_instrument.strip() if isinstance(profile.primary_instrument, str) and profile.primary_instrument.strip() else None
+    else:
+        existing.primary_instrument = None
+    
+    # Update age_commenced_playing (integer, allow None or 0)
+    existing.age_commenced_playing = profile.age_commenced_playing
+    
+    # Update secondary_instruments
+    if profile.secondary_instruments is not None:
+        existing.secondary_instruments = profile.secondary_instruments.strip() if isinstance(profile.secondary_instruments, str) and profile.secondary_instruments.strip() else None
+    else:
+        existing.secondary_instruments = None
+    
+    # Update daily_practice_hours (float, allow None or 0.0)
+    existing.daily_practice_hours = profile.daily_practice_hours
+    
+    # Update days_per_week_practising (integer, allow None or 0)
+    existing.days_per_week_practising = profile.days_per_week_practising
+    
+    # Update practice_routine_description
+    if profile.practice_routine_description is not None:
+        existing.practice_routine_description = profile.practice_routine_description.strip() if isinstance(profile.practice_routine_description, str) and profile.practice_routine_description.strip() else None
+    else:
+        existing.practice_routine_description = None
+    
+    # Update biography
     if profile.biography is not None:
-        existing.biography = profile.biography
+        existing.biography = profile.biography.strip() if isinstance(profile.biography, str) and profile.biography.strip() else None
+    else:
+        existing.biography = None
+    
+    # Update reminder_hours (integer, default 24)
     if profile.reminder_hours is not None:
         existing.reminder_hours = profile.reminder_hours
+    # If None, keep existing value (don't override with default)
+    
+    # Update notifications_enabled (boolean)
     if profile.notifications_enabled is not None:
         existing.notifications_enabled = profile.notifications_enabled
     

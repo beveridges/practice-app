@@ -20,18 +20,23 @@
         <!-- Header -->
         <header class="app-header">
             <h1>🎵 Instrument Hygiene</h1>
-            <button id="install-btn" class="install-btn" style="display: none;">
-                Install App
-            </button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="install-btn" class="install-btn" style="display: none;">
+                    Install App
+                </button>
+                <div id="profile-icon" class="profile-icon" title="View Profile">
+                    <span id="profile-initials">👤</span>
+                </div>
+            </div>
         </header>
 
         <!-- Navigation Tabs -->
         <nav class="app-nav">
-            <button class="nav-btn active" data-view="calendar">Calendar</button>
-            <button class="nav-btn" data-view="tasks">Tasks</button>
-            <button class="nav-btn" data-view="equipment">Equipment</button>
-            <button class="nav-btn" data-view="analytics">Analytics</button>
             <button class="nav-btn" data-view="signin">Sign In</button>
+            <button class="nav-btn" data-view="equipment">Equipment</button>
+            <button class="nav-btn" data-view="tasks">Tasks</button>
+            <button class="nav-btn active" data-view="calendar">Calendar</button>
+            <button class="nav-btn" data-view="achievements">Achievements</button>
         </nav>
 
         <!-- Main Content -->
@@ -82,12 +87,17 @@
                                 <input type="password" id="signup-password-confirm" placeholder="Confirm your password" required>
                             </div>
                             <button type="submit" class="btn btn-signup">Sign Up</button>
+                            <button type="button" class="btn btn-secondary" onclick="simulateSignupData()" style="margin-top: 0.5rem; width: 100%;">SIMULATE DATA</button>
                         </form>
+                        <p style="text-align: center; margin-top: 1rem;">
+                            <a href="#" id="privacy-link" class="privacy-link" onclick="event.preventDefault(); switchView('credits'); return false;">Privacy</a>
+                        </p>
                         <p class="auth-switch">
                             <a href="#" id="switch-to-signin">Return to Login</a>
                         </p>
                     </div>
                 </div>
+                
             </div>
 
             <!-- Calendar View -->
@@ -103,22 +113,29 @@
 
             <!-- Tasks View -->
             <div id="tasks-view" class="view">
-                <div class="task-tabs">
-                    <button class="task-tab active" data-filter="today">Today</button>
-                    <button class="task-tab" data-filter="tomorrow">Tomorrow</button>
-                    <button class="task-tab" data-filter="overdue">Overdue</button>
+                <div class="tasks-view-container">
+                    <div class="task-tabs">
+                        <button class="task-tab active" data-filter="today">Today</button>
+                        <button class="task-tab" data-filter="tomorrow">Tomorrow</button>
+                        <button class="task-tab" data-filter="overdue">Overdue</button>
+                    </div>
+                    <div id="tasks-list" class="tasks-list"></div>
                 </div>
-                <div id="tasks-list" class="tasks-list"></div>
             </div>
 
             <!-- Equipment View -->
             <div id="equipment-view" class="view">
-                <button id="add-equipment-btn" class="btn btn-primary">+ Add Equipment</button>
-                <div id="equipment-list" class="equipment-list"></div>
+                <div class="equipment-view-container">
+                    <button id="add-equipment-btn" class="btn btn-primary">+ Add Equipment</button>
+                    <div id="quick-add-instruments" class="quick-add-instruments">
+                        <!-- Quick-add buttons for user's instruments will be populated here -->
+                    </div>
+                    <div id="equipment-list" class="equipment-list"></div>
+                </div>
             </div>
 
-            <!-- Analytics View -->
-            <div id="analytics-view" class="view">
+            <!-- Achievements View -->
+            <div id="achievements-view" class="view">
                 <div class="analytics-section">
                     <h3>Completion Streak</h3>
                     <div class="streak-display" id="streak-display">0 days</div>
@@ -132,9 +149,198 @@
                     <div id="equipment-scores"></div>
                 </div>
             </div>
+
+            <!-- Profile View -->
+            <div id="profile-view" class="view">
+                <div class="profile-section">
+                    <div class="profile-header">
+                        <div class="profile-icon-large" id="profile-icon-large">
+                            <span id="profile-initials-large">U</span>
+                        </div>
+                        <h2 id="profile-name-display">User Name</h2>
+                        <p id="profile-email-display">user@example.com</p>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3>Personal Information</h3>
+                        <div class="profile-form">
+                            <div class="form-group">
+                                <label for="profile-edit-name">Name</label>
+                                <input type="text" id="profile-edit-name" placeholder="Your name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-email">Email</label>
+                                <input type="email" id="profile-edit-email" placeholder="your@email.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-dob">Date of Birth</label>
+                                <input type="date" id="profile-edit-dob">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-gender">Gender</label>
+                                <select id="profile-edit-gender">
+                                    <option value="">Select gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Non-binary">Non-binary</option>
+                                    <option value="Prefer not to say">Prefer not to say</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="button" class="btn btn-secondary" onclick="simulateProfileData()" style="margin-top: 1rem;">SIMULATE DATA</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3>Musical Information</h3>
+                        <div class="profile-form">
+                            <div class="form-group">
+                                <label for="profile-edit-primary-instrument">Primary Musical Instrument</label>
+                                <select id="profile-edit-primary-instrument" class="profile-instrument-select">
+                                    <option value="">Select or type instrument</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-age-commenced">Age of Commencement Playing Music</label>
+                                <input type="number" id="profile-edit-age-commenced" placeholder="e.g., 7" min="0" max="120">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-secondary-instruments">Secondary Instruments</label>
+                                <div class="custom-multi-select-wrapper">
+                                    <div id="profile-edit-secondary-instruments-display" class="custom-multi-select-display profile-instrument-select">
+                                        <span class="custom-multi-select-text">Select instruments</span>
+                                        <span class="custom-multi-select-arrow">▼</span>
+                                    </div>
+                                    <div id="profile-edit-secondary-instruments-dropdown" class="custom-multi-select-dropdown" style="display: none;">
+                                        <input type="text" class="custom-multi-select-search" placeholder="Search instruments..." id="profile-edit-secondary-instruments-search">
+                                        <div class="custom-multi-select-options" id="profile-edit-secondary-instruments-options">
+                                            <!-- Options will be populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                    <!-- Hidden input to store selected values (comma-separated) -->
+                                    <input type="hidden" id="profile-edit-secondary-instruments" name="secondary_instruments">
+                                </div>
+                                <small style="color: var(--text-secondary); font-size: 0.85em;">Click to select multiple instruments</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-daily-practice-hours">Daily Practice Hours</label>
+                                <input type="number" id="profile-edit-daily-practice-hours" placeholder="e.g., 4" min="0" max="24" step="0.5">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-days-per-week">Number of Days Per Week Practising</label>
+                                <input type="number" id="profile-edit-days-per-week" placeholder="e.g., 6" min="0" max="7">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-practice-routine">Describe Your Typical Practice Routine</label>
+                                <textarea id="profile-edit-practice-routine" placeholder="Describe your practice routine..." rows="4"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-edit-bio">Biography</label>
+                                <textarea id="profile-edit-bio" placeholder="Tell us about yourself..." rows="3"></textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="updateProfile()">Update Profile</button>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3>Notifications</h3>
+                        <div class="profile-form">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="profile-notifications-enabled"> Enable notifications
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-reminder-hours">Reminder hours before task due</label>
+                                <input type="number" id="profile-reminder-hours" min="1" max="168" value="24">
+                            </div>
+                            <button class="btn btn-primary" onclick="updateProfile()">Save Settings</button>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <button class="btn btn-danger" onclick="signOut()">Sign Out</button>
+                    </div>
+                    
+                    <!-- Legal/Attribution/Credits Link -->
+                    <div class="profile-section" style="margin-top: 2rem; text-align: center; padding-top: 2rem; border-top: 1px solid var(--border-color);">
+                        <a href="#" id="legal-credits-link" class="legal-credits-link" onclick="event.preventDefault(); switchView('credits'); return false;">Legal/Attribution/Credits</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Credits/Legal View -->
+            <div id="credits-view" class="view">
+                <div class="credits-container">
+                    <h2>Legal/Attribution/Credits</h2>
+                    
+                    <section class="credits-section">
+                        <h3>Icons</h3>
+                        <div class="credits-item">
+                            <div class="credits-icon-name">"Settings"</div>
+                            <div class="credits-details">
+                                <div class="credits-author"><strong>Author:</strong> John Doe</div>
+                                <div class="credits-source"><strong>Source:</strong> <a href="https://www.flaticon.com/free-icons/settings" target="_blank" rel="noopener noreferrer">https://www.flaticon.com/free-icons/settings</a></div>
+                                <div class="credits-license"><strong>License:</strong> CC BY 3.0</div>
+                            </div>
+                        </div>
+                        
+                        <div class="credits-item">
+                            <div class="credits-icon-name">Application toolbar icons</div>
+                            <div class="credits-details">
+                                <div class="credits-author"><strong>Author:</strong> Icons8</div>
+                                <div class="credits-source"><strong>Source:</strong> <a href="https://icons8.com" target="_blank" rel="noopener noreferrer">https://icons8.com</a></div>
+                                <div class="credits-license"><strong>License:</strong> Icons8 Free License</div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <section class="credits-section">
+                        <h3>Illustrations</h3>
+                        <div class="credits-item">
+                            <div class="credits-icon-name">Splash illustration</div>
+                            <div class="credits-details">
+                                <div class="credits-author"><strong>Author:</strong> Jane Smith</div>
+                                <div class="credits-source"><strong>Source:</strong> <a href="https://undraw.co" target="_blank" rel="noopener noreferrer">https://undraw.co</a></div>
+                                <div class="credits-license"><strong>License:</strong> MIT</div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <div class="credits-back">
+                        <button class="btn btn-secondary" onclick="switchView('profile')">Back to Profile</button>
+                    </div>
+                    
+                    <div class="credits-logo">
+                        <a href="https://www.moviolabs.com" target="_blank" rel="noopener noreferrer">
+                            <img src="/img/moviolabs_mm.png" alt="Movio Labs" class="moviolabs-logo">
+                        </a>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Footer -->
+        <!-- Bottom Navigation Menu -->
+        <nav class="app-bottom-nav">
+            <button class="bottom-nav-btn" data-view="signin" title="Sign In">
+                <img src="/img/icons/Profile.png" alt="Sign In" class="bottom-nav-icon" />
+            </button>
+            <button class="bottom-nav-btn" data-view="equipment" title="Equipment">
+                <img src="/img/icons/Equipment.png" alt="Equipment" class="bottom-nav-icon" />
+            </button>
+            <button class="bottom-nav-btn active" data-view="calendar" title="Calendar">
+                <img src="/img/icons/Calendar.png" alt="Calendar" class="bottom-nav-icon" />
+            </button>
+            <button class="bottom-nav-btn" data-view="tasks" title="Tasks">
+                <img src="/img/icons/Tasks.png" alt="Tasks" class="bottom-nav-icon" />
+            </button>
+            <button class="bottom-nav-btn" data-view="achievements" title="Achievements">
+                <img src="/img/icons/Progress.png" alt="Achievements" class="bottom-nav-icon" />
+            </button>
+        </nav>
+        
         <footer class="app-footer">
             <p class="offline-indicator" id="offline-indicator" style="display: none;">
                 ⚠️ Offline Mode
@@ -149,7 +355,10 @@
             <span class="modal-close">&times;</span>
             <h2 id="equipment-modal-title">Add Equipment</h2>
             <form id="equipment-form">
-                <input type="text" id="equipment-name" placeholder="Equipment name" required>
+                <input type="text" id="equipment-name" placeholder="Equipment name" list="equipment-name-suggestions" required>
+                <datalist id="equipment-name-suggestions">
+                    <!-- Options will be populated from user's profile instruments -->
+                </datalist>
                 <select id="equipment-category" required>
                     <option value="">Select category...</option>
                     <option value="Woodwind">Woodwind</option>
@@ -159,6 +368,10 @@
                     <option value="Percussion">Percussion</option>
                     <option value="Storage/Case">Storage/Case</option>
                     <option value="Other">Other</option>
+                </select>
+                <select id="equipment-instrument-type" required>
+                    <option value="Primary">Primary Instrument</option>
+                    <option value="Secondary">Secondary Instrument</option>
                 </select>
                 <textarea id="equipment-notes" placeholder="Notes (optional)" rows="3"></textarea>
                 <div class="modal-actions">

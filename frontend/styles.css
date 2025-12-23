@@ -36,6 +36,11 @@ body {
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .app-container {
@@ -46,6 +51,9 @@ body {
     flex-direction: column;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 /* Header */
@@ -60,6 +68,8 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .app-header h1 {
@@ -82,15 +92,46 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* Profile Icon */
+.profile-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+    color: white;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.profile-icon:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: scale(1.05);
+}
+
+#profile-initials {
+    user-select: none;
+}
+
 /* Navigation */
 .app-nav {
     display: flex;
     background: var(--surface);
     border-bottom: 1px solid var(--border-color);
     overflow-x: auto;
+    overflow-y: hidden;
     position: sticky;
     top: 60px;
     z-index: 90;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .nav-btn {
@@ -121,14 +162,21 @@ body {
     flex: 1;
     padding: 1rem;
     overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .view {
     display: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
 
 .view.active {
     display: block;
+    width: 100%;
 }
 
 /* Status Indicator */
@@ -265,6 +313,10 @@ body {
 }
 
 /* Tasks View */
+.tasks-view-container {
+    width: 100%;
+}
+
 .task-tabs {
     display: flex;
     gap: 0.5rem;
@@ -371,6 +423,37 @@ body {
 }
 
 /* Equipment View */
+.equipment-view-container {
+    width: 100%;
+}
+
+.quick-add-instruments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.quick-add-instrument-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    background: var(--secondary-color);
+    color: white;
+}
+
+.quick-add-instrument-btn:hover {
+    background: #C8956A;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
 .equipment-list {
     display: flex;
     flex-direction: column;
@@ -424,6 +507,373 @@ body {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.75rem;
+}
+
+/* Profile View */
+.profile-section {
+    background: var(--surface);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.legal-credits-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.2s;
+    cursor: pointer;
+}
+
+.legal-credits-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.privacy-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.2s;
+    cursor: pointer;
+}
+
+.privacy-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* Credits/Legal View */
+.credits-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+.credits-container h2 {
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+    font-size: 1.75rem;
+    text-align: center;
+}
+
+.credits-section {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+}
+
+.credits-section h3 {
+    color: var(--text-primary);
+    margin-bottom: 1.5rem;
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
+
+.credits-item {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.credits-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.credits-icon-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+.credits-details {
+    margin-left: 1rem;
+}
+
+.credits-details > div {
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.credits-details > div:last-child {
+    margin-bottom: 0;
+}
+
+.credits-author,
+.credits-source,
+.credits-license {
+    color: var(--text-primary);
+}
+
+.credits-source a {
+    color: var(--primary-color);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.credits-source a:hover {
+    text-decoration: underline;
+    color: var(--primary-dark);
+}
+
+.credits-back {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.credits-logo {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+.moviolabs-logo {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.credits-logo a {
+    display: inline-block;
+    transition: opacity 0.2s;
+}
+
+.credits-logo a:hover {
+    opacity: 0.8;
+}
+
+.profile-header {
+    text-align: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.profile-icon-large {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    border: 3px solid var(--primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-weight: 600;
+    color: white;
+    font-size: 2rem;
+}
+
+.profile-header h2 {
+    margin: 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.profile-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.profile-form {
+    max-width: 400px;
+}
+
+.profile-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.profile-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.profile-form input[type="text"],
+.profile-form input[type="email"],
+.profile-form input[type="number"],
+.profile-form textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.profile-form input[type="checkbox"] {
+    margin-right: 0.5rem;
+    width: auto;
+}
+
+.profile-form input[type="date"],
+.profile-form input[type="number"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.profile-form select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+}
+
+.profile-instrument-select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+}
+
+/* Custom multi-select dropdown to replace native multi-select (no checkboxes) */
+.custom-multi-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.custom-multi-select-display {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.custom-multi-select-text {
+    flex: 1;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom-multi-select-text.placeholder {
+    color: #999;
+}
+
+.custom-multi-select-arrow {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    margin-left: 0.5rem;
+    transition: transform 0.2s;
+}
+
+.custom-multi-select-wrapper.active .custom-multi-select-arrow {
+    transform: rotate(180deg);
+}
+
+.custom-multi-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-top: 0.25rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    max-height: 300px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.custom-multi-select-search {
+    padding: 0.5rem;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.custom-multi-select-options {
+    overflow-y: auto;
+    max-height: 250px;
+}
+
+.custom-multi-select-option {
+    padding: 0.75rem;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    transition: background-color 0.2s;
+}
+
+.custom-multi-select-option:hover {
+    background-color: #f0f0f0;
+}
+
+.custom-multi-select-option.selected {
+    background-color: #e3f2fd;
+    font-weight: 500;
+}
+
+.custom-multi-select-option.selected::before {
+    content: "✓ ";
+    color: var(--primary-color);
+    margin-right: 0.5rem;
+}
+
+/* Remove checkboxes from multi-select dropdown options */
+.profile-instrument-select[multiple] option {
+    padding-left: 0.75rem;
+    /* Remove checkbox styling */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+}
+
+.profile-form small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+    font-size: 0.85em;
 }
 
 /* Analytics View */
@@ -644,6 +1094,77 @@ label {
 }
 
 /* Footer */
+/* Bottom Navigation */
+.app-bottom-nav {
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border-color);
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    padding: 0.5rem 0;
+    width: 100%;
+}
+
+.bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 0.25rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 60px;
+}
+
+.bottom-nav-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+    flex-shrink: 0;
+}
+
+/* Ensure images load properly even if large source images */
+.bottom-nav-btn img.bottom-nav-icon {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.bottom-nav-btn.active .bottom-nav-icon {
+    filter: brightness(0) saturate(100%) invert(28%) sepia(85%) saturate(500%) hue-rotate(90deg) brightness(95%) contrast(90%);
+}
+
+.bottom-nav-btn:not(.active) .bottom-nav-icon {
+    opacity: 0.6;
+}
+
+
+.bottom-nav-btn.active {
+    color: var(--primary-color);
+}
+
+
+.bottom-nav-btn:hover {
+    background: var(--background);
+}
+
+.bottom-nav-btn:active {
+    transform: scale(0.95);
+}
+
+/* Ensure main content has padding at bottom to avoid being hidden by bottom nav */
+.app-main {
+    padding-bottom: 70px; /* Space for bottom nav */
+}
+
 .app-footer {
     background: var(--surface);
     border-top: 1px solid var(--border-color);
@@ -651,6 +1172,8 @@ label {
     text-align: center;
     color: var(--text-secondary);
     font-size: 0.875rem;
+    /* Hide footer on mobile since we have bottom nav */
+    display: none;
 }
 
 .offline-indicator {
