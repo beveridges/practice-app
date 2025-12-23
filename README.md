@@ -1,8 +1,10 @@
-# Instrument Hygiene Tracker
+# Practice Tracker Application 
 
-A Progressive Web App (PWA) for musicians to schedule and track hygiene maintenance for instruments and related equipment. Built with **FastAPI (Python)** backend and **vanilla JavaScript** frontend.
+A Progressive Web App (PWA) for musicians to track practice. Built with **FastAPI (Python)** backend and **vanilla JavaScript** frontend.
 
-## 🎵 Features
+Ported from Instrument Hygiene Tracker.
+
+## Features
 
 ### Core Functionality
 
