@@ -1,9 +1,9 @@
 """
-FastAPI Backend for Instrument Hygiene Tracking PWA
-Handles equipment, tasks, scheduling, and analytics
+FastAPI Backend for Practice Tracker PWA
+Handles instruments, tasks, scheduling, and analytics
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, HTMLResponse
@@ -16,17 +16,18 @@ import json
 import csv
 from io import StringIO
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from database import (
-    init_db, get_db, Base, engine, Equipment as DBEquipment, TaskDefinition as DBTaskDefinition,
-    TaskOccurrence as DBTaskOccurrence, TaskCompletion as DBTaskCompletion, UserProfile as DBUserProfile
+    init_db, get_db, Base, engine, Instrument as DBInstrument, TaskDefinition as DBTaskDefinition,
+    TaskOccurrence as DBTaskOccurrence, TaskCompletion as DBTaskCompletion, UserProfile as DBUserProfile,
+    PracticeSessionDefinition as DBPracticeSessionDefinition, PracticeSession as DBPracticeSession
 )
 from instrument_list import get_instruments_list
 from db_viewer import router as db_viewer_router
 from uuid_utils import generate_uuid
 from auth_utils import hash_password, verify_password
 
-app = FastAPI(title="Instrument Hygiene Tracking API", version="1.0.0")
+app = FastAPI(title="Practice Tracker API", version="1.0.0")
 
 # Include database viewer router
 app.include_router(db_viewer_router)
@@ -38,6 +39,31 @@ async def startup_event():
     # This allows multiple users to be added to the database
     init_db()
     print("✓ Database initialized (tables created if needed)")
+    
+    # Ensure "Practice General" practice session definition exists
+    db = next(get_db())
+    try:
+        practice_general = db.query(DBPracticeSessionDefinition).filter(
+            DBPracticeSessionDefinition.name == "Practice General"
+        ).first()
+        
+        if not practice_general:
+            print("Creating 'Practice General' practice session definition...")
+            practice_general = DBPracticeSessionDefinition(
+                id=generate_uuid(),
+                name="Practice General",
+                description="General practice session"
+            )
+            db.add(practice_general)
+            db.commit()
+            print(f"✓ Created Practice General (ID: {practice_general.id})")
+        else:
+            print(f"✓ Practice General already exists (ID: {practice_general.id})")
+    except Exception as e:
+        print(f"⚠️ Error checking/creating Practice General: {e}")
+        db.rollback()
+    finally:
+        db.close()
     
     # Note: For schema changes/migrations in the future, use proper migration tools like Alembic
 
@@ -65,10 +91,7 @@ class EquipmentCategory(str, Enum):
     OTHER = "Other"
 
 class TaskType(str, Enum):
-    CLEANING = "Cleaning"
-    DRYING = "Drying"
-    DISINFECTING = "Disinfecting"
-    OTHER = "Other"
+    PRACTICE = "Practice"
 
 class FrequencyType(str, Enum):
     DAYS = "days"  # Every N days
@@ -87,7 +110,7 @@ class InstrumentType(str, Enum):
     SECONDARY = "Secondary"
 
 # Data models
-class Equipment(BaseModel):
+class Instrument(BaseModel):
     id: Optional[str] = None  # UUID
     user_profile_id: Optional[str] = None  # UUID
     name: str
@@ -97,8 +120,8 @@ class Equipment(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
-class EquipmentCreate(BaseModel):
-    user_profile_id: str  # UUID - required
+class InstrumentCreate(BaseModel):
+    user_profile_id: Optional[str] = None  # UUID - optional for private app
     name: str
     category: EquipmentCategory
     instrument_type: InstrumentType = InstrumentType.PRIMARY  # Primary or Secondary
@@ -106,7 +129,7 @@ class EquipmentCreate(BaseModel):
 
 class TaskDefinition(BaseModel):
     id: Optional[str] = None  # UUID
-    equipment_id: str  # UUID
+    instrument_id: str  # UUID
     task_type: TaskType
     frequency_type: FrequencyType
     frequency_value: int  # N days, or 1 for weekly/monthly
@@ -114,7 +137,7 @@ class TaskDefinition(BaseModel):
     created_at: Optional[str] = None
 
 class TaskDefinitionCreate(BaseModel):
-    equipment_id: str  # UUID
+    instrument_id: str  # UUID
     task_type: TaskType
     frequency_type: FrequencyType
     frequency_value: int
@@ -123,7 +146,7 @@ class TaskDefinitionCreate(BaseModel):
 class TaskOccurrence(BaseModel):
     id: Optional[str] = None  # UUID
     task_definition_id: str  # UUID
-    equipment_id: str  # UUID
+    instrument_id: str  # UUID
     due_date: str  # ISO date
     task_type: TaskType
     completed: bool = False
@@ -135,6 +158,37 @@ class TaskCompletion(BaseModel):
     task_occurrence_id: str  # UUID
     notes: Optional[str] = None
     photo_url: Optional[str] = None  # In production, handle file uploads
+
+class PracticeSessionDefinition(BaseModel):
+    id: Optional[str] = None  # UUID
+    name: str
+    description: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class PracticeSession(BaseModel):
+    id: Optional[str] = None  # UUID
+    instrument_id: str  # UUID
+    practice_session_definition_id: str  # UUID
+    due_date: str  # ISO date
+    start_time: Optional[str] = None  # ISO datetime
+    end_time: Optional[str] = None  # ISO datetime
+    duration: Optional[int] = None  # Duration in milliseconds
+    completed: bool = False
+    completed_at: Optional[str] = None
+    notes: Optional[str] = None
+    photo_url: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class PracticeSessionCreate(BaseModel):
+    instrument_id: str  # UUID
+    practice_session_definition_id: str  # UUID
+    due_date: str  # ISO date
+    start_time: Optional[str] = None  # ISO datetime
+    end_time: Optional[str] = None  # ISO datetime
+    duration: Optional[int] = None  # Duration in milliseconds
+    notes: Optional[str] = None
 
 class UserProfile(BaseModel):
     id: Optional[str] = None  # UUID
@@ -205,24 +259,24 @@ class AuthResponse(BaseModel):
     message: str = "Success"
 
 # Helper functions
-def db_equipment_to_pydantic(db_equipment: DBEquipment) -> Equipment:
-    """Convert database Equipment model to Pydantic Equipment model"""
-    return Equipment(
-        id=db_equipment.id,
-        user_profile_id=db_equipment.user_profile_id,
-        name=db_equipment.name,
-        category=db_equipment.category,
-        instrument_type=InstrumentType(db_equipment.instrument_type) if db_equipment.instrument_type else InstrumentType.PRIMARY,
-        notes=db_equipment.notes,
-        created_at=db_equipment.created_at.isoformat() if db_equipment.created_at else None,
-        updated_at=db_equipment.updated_at.isoformat() if db_equipment.updated_at else None
+def db_instrument_to_pydantic(db_instrument: DBInstrument) -> Instrument:
+    """Convert database Instrument model to Pydantic Instrument model"""
+    return Instrument(
+        id=db_instrument.id,
+        user_profile_id=db_instrument.user_profile_id,
+        name=db_instrument.name,
+        category=db_instrument.category,
+        instrument_type=InstrumentType(db_instrument.instrument_type) if db_instrument.instrument_type else InstrumentType.PRIMARY,
+        notes=db_instrument.notes,
+        created_at=db_instrument.created_at.isoformat() if db_instrument.created_at else None,
+        updated_at=db_instrument.updated_at.isoformat() if db_instrument.updated_at else None
     )
 
 def db_task_definition_to_pydantic(db_task_def: DBTaskDefinition) -> TaskDefinition:
     """Convert database TaskDefinition to Pydantic model"""
     return TaskDefinition(
         id=db_task_def.id,
-        equipment_id=db_task_def.equipment_id,
+        instrument_id=db_task_def.instrument_id,
         task_type=db_task_def.task_type,
         frequency_type=db_task_def.frequency_type,
         frequency_value=db_task_def.frequency_value,
@@ -235,13 +289,41 @@ def db_task_occurrence_to_pydantic(db_task_occ: DBTaskOccurrence) -> TaskOccurre
     return TaskOccurrence(
         id=db_task_occ.id,
         task_definition_id=db_task_occ.task_definition_id,
-        equipment_id=db_task_occ.equipment_id,
+        instrument_id=db_task_occ.instrument_id,
         due_date=db_task_occ.due_date.isoformat(),
         task_type=db_task_occ.task_type,
         completed=db_task_occ.completed,
         completed_at=db_task_occ.completed_at.isoformat() if db_task_occ.completed_at else None,
         notes=db_task_occ.notes,
         photo_url=db_task_occ.photo_url
+    )
+
+def db_practice_session_definition_to_pydantic(db_def: DBPracticeSessionDefinition) -> PracticeSessionDefinition:
+    """Convert database PracticeSessionDefinition to Pydantic model"""
+    return PracticeSessionDefinition(
+        id=db_def.id,
+        name=db_def.name,
+        description=db_def.description,
+        created_at=db_def.created_at.isoformat() if db_def.created_at else None,
+        updated_at=db_def.updated_at.isoformat() if db_def.updated_at else None
+    )
+
+def db_practice_session_to_pydantic(db_session: DBPracticeSession) -> PracticeSession:
+    """Convert database PracticeSession to Pydantic model"""
+    return PracticeSession(
+        id=db_session.id,
+        instrument_id=db_session.instrument_id,
+        practice_session_definition_id=db_session.practice_session_definition_id,
+        due_date=db_session.due_date.isoformat() if db_session.due_date else None,
+        start_time=db_session.start_time.isoformat() if db_session.start_time else None,
+        end_time=db_session.end_time.isoformat() if db_session.end_time else None,
+        duration=db_session.duration,
+        completed=db_session.completed,
+        completed_at=db_session.completed_at.isoformat() if db_session.completed_at else None,
+        notes=db_session.notes,
+        photo_url=db_session.photo_url,
+        created_at=db_session.created_at.isoformat() if hasattr(db_session, 'created_at') and db_session.created_at else None,
+        updated_at=db_session.updated_at.isoformat() if hasattr(db_session, 'updated_at') and db_session.updated_at else None
     )
 
 def db_user_profile_to_pydantic(db_profile: DBUserProfile) -> UserProfile:
@@ -285,7 +367,7 @@ def generate_task_occurrences(task_def: DBTaskDefinition, db: Session, end_date:
         occurrence = DBTaskOccurrence(
             id=generate_uuid(),
             task_definition_id=task_def.id,
-            equipment_id=task_def.equipment_id,
+            instrument_id=task_def.instrument_id,
             due_date=current_date,
             task_type=task_def.task_type,
             completed=False,
@@ -347,7 +429,7 @@ async def root():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Hygiene Tracker API</title>
+        <title>Practice Tracker API</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
             .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -361,7 +443,7 @@ async def root():
     </head>
     <body>
         <div class="container">
-            <h1>🎵 Instrument Hygiene Tracking API</h1>
+            <h1>🎵 Practice Tracker API</h1>
             <p class="status">✓ Status: Running</p>
             
             <div class="link-box">
@@ -385,94 +467,90 @@ async def root():
     return html
 
 @app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
+async def health_check(db: Session = Depends(get_db)):
+    """Health check endpoint - checks both API and database connectivity"""
+    db_connected = False
+    try:
+        # Test database connection by executing a simple query
+        result = db.execute(text("SELECT 1"))
+        result.fetchone()  # Actually fetch the result
+        db_connected = True
+    except Exception as e:
+        print(f"Database connection check failed: {e}")
+        db_connected = False
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if db_connected else "degraded",
+        "database": "connected" if db_connected else "disconnected",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0"
     }
 
-# Equipment endpoints
-@app.get("/api/equipment", response_model=List[Equipment])
-async def get_equipment(user_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """Get equipment - optionally filtered by user_id"""
-    query = db.query(DBEquipment)
+# Instrument endpoints
+@app.get("/api/instruments", response_model=List[Instrument])
+async def get_instruments(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get instruments - optionally filtered by user_id"""
+    query = db.query(DBInstrument)
     if user_id:
-        query = query.filter(DBEquipment.user_profile_id == user_id)
-    db_equipment = query.all()
-    return [db_equipment_to_pydantic(eq) for eq in db_equipment]
+        query = query.filter(DBInstrument.user_profile_id == user_id)
+    db_instruments = query.all()
+    return [db_instrument_to_pydantic(instr) for instr in db_instruments]
 
-@app.get("/api/equipment/{equipment_id}", response_model=Equipment)
-async def get_equipment_item(equipment_id: str, db: Session = Depends(get_db)):
-    """Get a specific equipment item"""
-    item = db.query(DBEquipment).filter(DBEquipment.id == equipment_id).first()
+@app.get("/api/instruments/{instrument_id}", response_model=Instrument)
+async def get_instrument_item(instrument_id: str, db: Session = Depends(get_db)):
+    """Get a specific instrument item"""
+    item = db.query(DBInstrument).filter(DBInstrument.id == instrument_id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Equipment not found")
-    return db_equipment_to_pydantic(item)
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    return db_instrument_to_pydantic(item)
 
-@app.post("/api/equipment", response_model=Equipment)
-async def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
-    """Create new equipment - requires user_profile_id"""
-    if not equipment.user_profile_id:
-        raise HTTPException(status_code=400, detail="user_profile_id is required")
-    
-    # Verify user exists
-    user = db.query(DBUserProfile).filter(DBUserProfile.id == equipment.user_profile_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User profile not found")
-    
-    new_equipment = DBEquipment(
+@app.post("/api/instruments", response_model=Instrument)
+async def create_instrument(instrument: InstrumentCreate, db: Session = Depends(get_db)):
+    """Create new instrument - user_profile_id is optional for private app"""
+    new_instrument = DBInstrument(
         id=generate_uuid(),
-        user_profile_id=equipment.user_profile_id,
-        name=equipment.name,
-        category=equipment.category,
-        instrument_type=equipment.instrument_type.value if isinstance(equipment.instrument_type, InstrumentType) else equipment.instrument_type,
-        notes=equipment.notes
+        user_profile_id=instrument.user_profile_id,  # Can be None for private app
+        name=instrument.name,
+        category=instrument.category,
+        instrument_type=instrument.instrument_type.value if isinstance(instrument.instrument_type, InstrumentType) else instrument.instrument_type,
+        notes=instrument.notes
     )
-    db.add(new_equipment)
+    db.add(new_instrument)
     db.commit()
-    db.refresh(new_equipment)
-    return db_equipment_to_pydantic(new_equipment)
+    db.refresh(new_instrument)
+    return db_instrument_to_pydantic(new_instrument)
 
-@app.put("/api/equipment/{equipment_id}", response_model=Equipment)
-async def update_equipment(equipment_id: str, equipment: EquipmentCreate, db: Session = Depends(get_db)):
-    """Update equipment"""
-    existing = db.query(DBEquipment).filter(DBEquipment.id == equipment_id).first()
+@app.put("/api/instruments/{instrument_id}", response_model=Instrument)
+async def update_instrument(instrument_id: str, instrument: InstrumentCreate, db: Session = Depends(get_db)):
+    """Update instrument"""
+    existing = db.query(DBInstrument).filter(DBInstrument.id == instrument_id).first()
     if not existing:
-        raise HTTPException(status_code=404, detail="Equipment not found")
+        raise HTTPException(status_code=404, detail="Instrument not found")
     
-    existing.name = equipment.name
-    existing.category = equipment.category
-    existing.instrument_type = equipment.instrument_type.value if isinstance(equipment.instrument_type, InstrumentType) else equipment.instrument_type
-    existing.notes = equipment.notes
-    if equipment.user_profile_id:
-        existing.user_profile_id = equipment.user_profile_id
+    existing.name = instrument.name
+    existing.category = instrument.category
+    existing.instrument_type = instrument.instrument_type.value if isinstance(instrument.instrument_type, InstrumentType) else instrument.instrument_type
+    existing.notes = instrument.notes
+    if instrument.user_profile_id:
+        existing.user_profile_id = instrument.user_profile_id
     existing.updated_at = datetime.utcnow()
     
     db.commit()
     db.refresh(existing)
-    return db_equipment_to_pydantic(existing)
+    return db_instrument_to_pydantic(existing)
 
-@app.delete("/api/equipment/{equipment_id}")
-async def delete_equipment(equipment_id: str, db: Session = Depends(get_db)):
-    """Delete equipment and all related tasks"""
-    existing = db.query(DBEquipment).filter(DBEquipment.id == equipment_id).first()
+@app.delete("/api/instruments/{instrument_id}")
+async def delete_instrument(instrument_id: str, db: Session = Depends(get_db)):
+    """Delete instrument and all related tasks"""
+    existing = db.query(DBInstrument).filter(DBInstrument.id == instrument_id).first()
     if not existing:
-        raise HTTPException(status_code=404, detail="Equipment not found")
+        raise HTTPException(status_code=404, detail="Instrument not found")
     
-    # Delete equipment
-    equipment_db = [e for e in equipment_db if e["id"] != equipment_id]
+    # Delete instrument (cascade will handle related tasks)
+    db.delete(existing)
+    db.commit()
     
-    # Delete task definitions
-    def_ids_to_delete = [td["id"] for td in task_definitions_db if td["equipment_id"] == equipment_id]
-    task_definitions_db = [td for td in task_definitions_db if td["equipment_id"] != equipment_id]
-    
-    # Delete task occurrences
-    task_occurrences_db = [to for to in task_occurrences_db 
-                          if to["equipment_id"] != equipment_id]
-    
-    return {"message": "Equipment deleted", "id": equipment_id}
+    return {"message": "Instrument deleted", "id": instrument_id}
 
 # Task definition endpoints
 @app.get("/api/task-definitions")
@@ -481,23 +559,23 @@ async def get_task_definitions(db: Session = Depends(get_db)):
     db_task_defs = db.query(DBTaskDefinition).all()
     return [db_task_definition_to_pydantic(td) for td in db_task_defs]
 
-@app.get("/api/task-definitions/equipment/{equipment_id}")
-async def get_task_definitions_by_equipment(equipment_id: str, db: Session = Depends(get_db)):
-    """Get task definitions for specific equipment"""
-    db_task_defs = db.query(DBTaskDefinition).filter(DBTaskDefinition.equipment_id == equipment_id).all()
+@app.get("/api/task-definitions/instrument/{instrument_id}")
+async def get_task_definitions_by_instrument(instrument_id: str, db: Session = Depends(get_db)):
+    """Get task definitions for specific instrument"""
+    db_task_defs = db.query(DBTaskDefinition).filter(DBTaskDefinition.instrument_id == instrument_id).all()
     return [db_task_definition_to_pydantic(td) for td in db_task_defs]
 
 @app.post("/api/task-definitions")
 async def create_task_definition(task_def: TaskDefinitionCreate, db: Session = Depends(get_db)):
     """Create a new task definition and generate occurrences"""
-    # Verify equipment exists
-    equipment = db.query(DBEquipment).filter(DBEquipment.id == task_def.equipment_id).first()
-    if not equipment:
-        raise HTTPException(status_code=404, detail="Equipment not found")
+    # Verify instrument exists
+    instrument = db.query(DBInstrument).filter(DBInstrument.id == task_def.instrument_id).first()
+    if not instrument:
+        raise HTTPException(status_code=404, detail="Instrument not found")
     
     new_def = DBTaskDefinition(
         id=generate_uuid(),
-        equipment_id=task_def.equipment_id,
+        instrument_id=task_def.instrument_id,
         task_type=task_def.task_type,
         frequency_type=task_def.frequency_type,
         frequency_value=task_def.frequency_value,
@@ -525,68 +603,336 @@ async def delete_task_definition(task_def_id: str, db: Session = Depends(get_db)
     
     return {"message": "Task definition deleted", "id": task_def_id}
 
+# Practice Session Definition endpoints
+@app.get("/api/practice-session-definitions", response_model=List[PracticeSessionDefinition])
+async def get_practice_session_definitions(db: Session = Depends(get_db)):
+    """Get all practice session definitions"""
+    db_defs = db.query(DBPracticeSessionDefinition).all()
+    return [db_practice_session_definition_to_pydantic(d) for d in db_defs]
+
 # Task occurrence endpoints
 @app.get("/api/tasks")
 async def get_tasks(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    equipment_id: Optional[str] = None,
+    instrument_id: Optional[str] = None,
     task_type: Optional[TaskType] = None,
     completed: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
-    """Get task occurrences with optional filters"""
-    query = db.query(DBTaskOccurrence)
+    """Get practice sessions (legacy endpoint - returns PracticeSession data in TaskOccurrence format for compatibility)"""
+    # Query PracticeSession instead of TaskOccurrence
+    query = db.query(DBPracticeSession)
     
     if start_date:
-        query = query.filter(DBTaskOccurrence.due_date >= date.fromisoformat(start_date))
+        query = query.filter(DBPracticeSession.due_date >= date.fromisoformat(start_date))
     if end_date:
-        query = query.filter(DBTaskOccurrence.due_date <= date.fromisoformat(end_date))
-    if equipment_id:
-        query = query.filter(DBTaskOccurrence.equipment_id == equipment_id)
-    if task_type:
-        query = query.filter(DBTaskOccurrence.task_type == task_type)
+        query = query.filter(DBPracticeSession.due_date <= date.fromisoformat(end_date))
+    if instrument_id:
+        query = query.filter(DBPracticeSession.instrument_id == instrument_id)
     if completed is not None:
-        query = query.filter(DBTaskOccurrence.completed == completed)
+        query = query.filter(DBPracticeSession.completed == completed)
     
-    tasks = query.order_by(DBTaskOccurrence.due_date).all()
-    return [db_task_occurrence_to_pydantic(t) for t in tasks]
+    sessions = query.order_by(DBPracticeSession.due_date).all()
+    
+    # Convert PracticeSession to TaskOccurrence format for backward compatibility
+    # Get "Practice General" definition ID for mapping
+    practice_general = db.query(DBPracticeSessionDefinition).filter(
+        DBPracticeSessionDefinition.name == "Practice General"
+    ).first()
+    
+    result = []
+    for session in sessions:
+        # Convert to TaskOccurrence-like format
+        result.append({
+            "id": session.id,
+            "task_definition_id": "",  # Not applicable for PracticeSession
+            "instrument_id": session.instrument_id,
+            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "task_type": "Practice",  # Default to Practice
+            "completed": session.completed,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "notes": session.notes,
+            "photo_url": session.photo_url,
+            # Add new fields for frontend
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "duration": session.duration,
+            "practice_session_definition_id": session.practice_session_definition_id
+        })
+    
+    return result
+
+@app.get("/api/practice-sessions")
+async def get_practice_sessions(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    instrument_id: Optional[str] = None,
+    practice_session_definition_id: Optional[str] = None,
+    completed: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get practice sessions with optional filters"""
+    query = db.query(DBPracticeSession)
+    
+    if start_date:
+        query = query.filter(DBPracticeSession.due_date >= date.fromisoformat(start_date))
+    if end_date:
+        query = query.filter(DBPracticeSession.due_date <= date.fromisoformat(end_date))
+    if instrument_id:
+        query = query.filter(DBPracticeSession.instrument_id == instrument_id)
+    if practice_session_definition_id:
+        query = query.filter(DBPracticeSession.practice_session_definition_id == practice_session_definition_id)
+    if completed is not None:
+        query = query.filter(DBPracticeSession.completed == completed)
+    
+    sessions = query.order_by(DBPracticeSession.due_date).all()
+    return [db_practice_session_to_pydantic(s) for s in sessions]
+
+@app.post("/api/practice-sessions", response_model=PracticeSession)
+async def create_practice_session(session: PracticeSessionCreate, db: Session = Depends(get_db)):
+    """Create a new practice session"""
+    # Verify instrument exists
+    instrument = db.query(DBInstrument).filter(DBInstrument.id == session.instrument_id).first()
+    if not instrument:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    
+    # Verify practice session definition exists
+    practice_def = db.query(DBPracticeSessionDefinition).filter(
+        DBPracticeSessionDefinition.id == session.practice_session_definition_id
+    ).first()
+    if not practice_def:
+        raise HTTPException(status_code=404, detail="Practice session definition not found")
+    
+    # Parse dates
+    try:
+        due_date = date.fromisoformat(session.due_date) if session.due_date else date.today()
+    except (ValueError, AttributeError):
+        # If due_date is in datetime format, extract just the date part
+        if session.due_date and 'T' in session.due_date:
+            due_date = date.fromisoformat(session.due_date.split('T')[0])
+        else:
+            due_date = date.today()
+    
+    start_time = None
+    if session.start_time:
+        try:
+            start_time = datetime.fromisoformat(session.start_time.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            start_time = None
+    
+    end_time = None
+    if session.end_time:
+        try:
+            end_time = datetime.fromisoformat(session.end_time.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            end_time = None
+    
+    # Create new session
+    new_session = DBPracticeSession(
+        id=generate_uuid(),
+        instrument_id=session.instrument_id,
+        practice_session_definition_id=session.practice_session_definition_id,
+        due_date=due_date,
+        start_time=start_time,
+        end_time=end_time,
+        duration=session.duration,
+        completed=False,
+        notes=session.notes
+    )
+    
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    
+    return db_practice_session_to_pydantic(new_session)
+
+@app.put("/api/practice-sessions/{session_id}", response_model=PracticeSession)
+async def update_practice_session(session_id: str, session: PracticeSessionCreate, db: Session = Depends(get_db)):
+    """Update an existing practice session"""
+    existing = db.query(DBPracticeSession).filter(DBPracticeSession.id == session_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Practice session not found")
+    
+    # Verify instrument exists
+    instrument = db.query(DBInstrument).filter(DBInstrument.id == session.instrument_id).first()
+    if not instrument:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    
+    # Verify practice session definition exists
+    practice_def = db.query(DBPracticeSessionDefinition).filter(
+        DBPracticeSessionDefinition.id == session.practice_session_definition_id
+    ).first()
+    if not practice_def:
+        raise HTTPException(status_code=404, detail="Practice session definition not found")
+    
+    # Parse dates
+    try:
+        due_date = date.fromisoformat(session.due_date) if session.due_date else existing.due_date
+    except (ValueError, AttributeError):
+        # If due_date is in datetime format, extract just the date part
+        if session.due_date and 'T' in session.due_date:
+            due_date = date.fromisoformat(session.due_date.split('T')[0])
+        else:
+            due_date = existing.due_date
+    
+    start_time = None
+    if session.start_time:
+        try:
+            start_time = datetime.fromisoformat(session.start_time.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            start_time = existing.start_time
+    
+    end_time = None
+    if session.end_time:
+        try:
+            end_time = datetime.fromisoformat(session.end_time.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            end_time = existing.end_time
+    
+    # Update session
+    existing.instrument_id = session.instrument_id
+    existing.practice_session_definition_id = session.practice_session_definition_id
+    existing.due_date = due_date
+    existing.start_time = start_time
+    existing.end_time = end_time
+    existing.duration = session.duration
+    existing.notes = session.notes
+    existing.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(existing)
+    
+    return db_practice_session_to_pydantic(existing)
+
+@app.delete("/api/practice-sessions/{session_id}")
+async def delete_practice_session(session_id: str, db: Session = Depends(get_db)):
+    """Delete a practice session"""
+    session = db.query(DBPracticeSession).filter(DBPracticeSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Practice session not found")
+    
+    db.delete(session)
+    db.commit()
+    
+    return {"message": "Practice session deleted", "id": session_id}
+
+@app.get("/api/practice-sessions/total-time")
+async def get_total_practice_time(db: Session = Depends(get_db)):
+    """Calculate total practice time from all sessions in the database"""
+    from sqlalchemy import func
+    total = db.query(func.sum(DBPracticeSession.duration)).filter(
+        DBPracticeSession.duration.isnot(None)
+    ).scalar()
+    return {"total_time": int(total) if total else 0}
 
 @app.get("/api/tasks/date/{task_date}")
 async def get_tasks_by_date(task_date: str, db: Session = Depends(get_db)):
-    """Get all tasks for a specific date"""
-    tasks = db.query(DBTaskOccurrence).filter(DBTaskOccurrence.due_date == date.fromisoformat(task_date)).all()
-    return [db_task_occurrence_to_pydantic(t) for t in tasks]
+    """Get all practice sessions for a specific date (legacy endpoint)"""
+    sessions = db.query(DBPracticeSession).filter(DBPracticeSession.due_date == date.fromisoformat(task_date)).all()
+    # Convert to TaskOccurrence format for backward compatibility
+    result = []
+    for session in sessions:
+        result.append({
+            "id": session.id,
+            "task_definition_id": "",
+            "instrument_id": session.instrument_id,
+            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "task_type": "Practice",
+            "completed": session.completed,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "notes": session.notes,
+            "photo_url": session.photo_url,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "duration": session.duration,
+            "practice_session_definition_id": session.practice_session_definition_id
+        })
+    return result
 
 @app.get("/api/tasks/today")
 async def get_tasks_today(db: Session = Depends(get_db)):
-    """Get tasks due today"""
+    """Get practice sessions due today (legacy endpoint)"""
     today = date.today()
-    tasks = db.query(DBTaskOccurrence).filter(
-        DBTaskOccurrence.due_date == today,
-        DBTaskOccurrence.completed == False
+    sessions = db.query(DBPracticeSession).filter(
+        DBPracticeSession.due_date == today,
+        DBPracticeSession.completed == False
     ).all()
-    return [db_task_occurrence_to_pydantic(t) for t in tasks]
+    # Convert to TaskOccurrence format
+    result = []
+    for session in sessions:
+        result.append({
+            "id": session.id,
+            "task_definition_id": "",
+            "instrument_id": session.instrument_id,
+            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "task_type": "Practice",
+            "completed": session.completed,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "notes": session.notes,
+            "photo_url": session.photo_url,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "duration": session.duration,
+            "practice_session_definition_id": session.practice_session_definition_id
+        })
+    return result
 
 @app.get("/api/tasks/tomorrow")
 async def get_tasks_tomorrow(db: Session = Depends(get_db)):
-    """Get tasks due tomorrow"""
+    """Get practice sessions due tomorrow (legacy endpoint)"""
     tomorrow = date.today() + timedelta(days=1)
-    tasks = db.query(DBTaskOccurrence).filter(
-        DBTaskOccurrence.due_date == tomorrow,
-        DBTaskOccurrence.completed == False
+    sessions = db.query(DBPracticeSession).filter(
+        DBPracticeSession.due_date == tomorrow,
+        DBPracticeSession.completed == False
     ).all()
-    return [db_task_occurrence_to_pydantic(t) for t in tasks]
+    # Convert to TaskOccurrence format
+    result = []
+    for session in sessions:
+        result.append({
+            "id": session.id,
+            "task_definition_id": "",
+            "instrument_id": session.instrument_id,
+            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "task_type": "Practice",
+            "completed": session.completed,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "notes": session.notes,
+            "photo_url": session.photo_url,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "duration": session.duration,
+            "practice_session_definition_id": session.practice_session_definition_id
+        })
+    return result
 
 @app.get("/api/tasks/overdue")
 async def get_tasks_overdue(db: Session = Depends(get_db)):
-    """Get overdue tasks"""
+    """Get overdue practice sessions (legacy endpoint)"""
     today = date.today()
-    tasks = db.query(DBTaskOccurrence).filter(
-        DBTaskOccurrence.due_date < today,
-        DBTaskOccurrence.completed == False
+    sessions = db.query(DBPracticeSession).filter(
+        DBPracticeSession.due_date < today,
+        DBPracticeSession.completed == False
     ).all()
-    return [db_task_occurrence_to_pydantic(t) for t in tasks]
+    # Convert to TaskOccurrence format
+    result = []
+    for session in sessions:
+        result.append({
+            "id": session.id,
+            "task_definition_id": "",
+            "instrument_id": session.instrument_id,
+            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "task_type": "Practice",
+            "completed": session.completed,
+            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            "notes": session.notes,
+            "photo_url": session.photo_url,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "duration": session.duration,
+            "practice_session_definition_id": session.practice_session_definition_id
+        })
+    return result
 
 @app.post("/api/tasks/{task_id}/complete")
 async def complete_task(task_id: str, completion: TaskCompletion, db: Session = Depends(get_db)):
@@ -605,7 +951,7 @@ async def complete_task(task_id: str, completion: TaskCompletion, db: Session = 
     task_completion = DBTaskCompletion(
         id=generate_uuid(),
         task_occurrence_id=task_id,
-        equipment_id=task.equipment_id,
+        instrument_id=task.instrument_id,
         task_type=task.task_type,
         completed_at=now,
         notes=completion.notes,
@@ -617,12 +963,41 @@ async def complete_task(task_id: str, completion: TaskCompletion, db: Session = 
     
     return db_task_occurrence_to_pydantic(task)
 
-@app.post("/api/tasks/equipment/{equipment_id}/complete-all")
-async def complete_all_tasks_for_equipment(equipment_id: str, db: Session = Depends(get_db)):
-    """Batch complete all due/overdue tasks for equipment"""
+@app.put("/api/tasks/{task_id}/reschedule")
+async def reschedule_task(task_id: str, new_date: dict, db: Session = Depends(get_db)):
+    """Reschedule a practice session to a new due date (legacy endpoint)"""
+    session = db.query(DBPracticeSession).filter(DBPracticeSession.id == task_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Practice session not found")
+    
+    try:
+        new_due_date = date.fromisoformat(new_date.get('due_date'))
+        session.due_date = new_due_date
+        session.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(session)
+        return db_practice_session_to_pydantic(session)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task_occurrence(task_id: str, db: Session = Depends(get_db)):
+    """Delete a single task occurrence (practice session)"""
+    task = db.query(DBTaskOccurrence).filter(DBTaskOccurrence.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    db.delete(task)
+    db.commit()
+    
+    return {"message": "Task occurrence deleted", "id": task_id}
+
+@app.post("/api/tasks/instrument/{instrument_id}/complete-all")
+async def complete_all_tasks_for_instrument(instrument_id: str, db: Session = Depends(get_db)):
+    """Batch complete all due/overdue tasks for instrument"""
     today = date.today()
     tasks = db.query(DBTaskOccurrence).filter(
-        DBTaskOccurrence.equipment_id == equipment_id,
+        DBTaskOccurrence.instrument_id == instrument_id,
         DBTaskOccurrence.due_date <= today,
         DBTaskOccurrence.completed == False
     ).all()
@@ -638,7 +1013,7 @@ async def complete_all_tasks_for_equipment(equipment_id: str, db: Session = Depe
         task_completion = DBTaskCompletion(
             id=generate_uuid(),
             task_occurrence_id=task.id,
-            equipment_id=equipment_id,
+            instrument_id=instrument_id,
             task_type=task.task_type,
             completed_at=now,
             notes=None,
@@ -676,26 +1051,26 @@ async def get_streak(db: Session = Depends(get_db)):
     """Get completion streak"""
     return {"streak_days": get_completion_streak(db)}
 
-@app.get("/api/analytics/equipment-scores")
-async def get_equipment_scores(db: Session = Depends(get_db)):
-    """Get maintenance score per equipment (last 30 days)"""
+@app.get("/api/analytics/instrument-scores")
+async def get_instrument_scores(db: Session = Depends(get_db)):
+    """Get maintenance score per instrument (last 30 days)"""
     thirty_days_ago = date.today() - timedelta(days=30)
-    all_equipment = db.query(DBEquipment).all()
+    all_instruments = db.query(DBInstrument).all()
     scores = []
     
-    for equipment in all_equipment:
-        eq_tasks = db.query(DBTaskOccurrence).filter(
-            DBTaskOccurrence.equipment_id == equipment.id,
+    for instrument in all_instruments:
+        instr_tasks = db.query(DBTaskOccurrence).filter(
+            DBTaskOccurrence.instrument_id == instrument.id,
             DBTaskOccurrence.due_date >= thirty_days_ago
         ).all()
-        completed = [t for t in eq_tasks if t.completed]
-        score = (len(completed) / len(eq_tasks) * 100) if eq_tasks else 0
+        completed = [t for t in instr_tasks if t.completed]
+        score = (len(completed) / len(instr_tasks) * 100) if instr_tasks else 0
         
         scores.append({
-            "equipment_id": equipment.id,
-            "equipment_name": equipment.name,
+            "instrument_id": instrument.id,
+            "instrument_name": instrument.name,
             "score": round(score, 2),
-            "total_tasks": len(eq_tasks),
+            "total_tasks": len(instr_tasks),
             "completed_tasks": len(completed)
         })
     
@@ -703,23 +1078,23 @@ async def get_equipment_scores(db: Session = Depends(get_db)):
 
 @app.get("/api/analytics/task-breakdown")
 async def get_task_breakdown(db: Session = Depends(get_db)):
-    """Get task breakdown by type and equipment"""
+    """Get task breakdown by type and instrument"""
     breakdown = {
         "by_type": {},
-        "by_equipment": {}
+        "by_instrument": {}
     }
     
     all_tasks = db.query(DBTaskOccurrence).all()
-    all_equipment = {eq.id: eq.name for eq in db.query(DBEquipment).all()}
+    all_instruments = {instr.id: instr.name for instr in db.query(DBInstrument).all()}
     
     for task in all_tasks:
         # By type
         task_type = task.task_type
         breakdown["by_type"][task_type] = breakdown["by_type"].get(task_type, 0) + 1
         
-        # By equipment
-        eq_name = all_equipment.get(task.equipment_id, "Unknown")
-        breakdown["by_equipment"][eq_name] = breakdown["by_equipment"].get(eq_name, 0) + 1
+        # By instrument
+        instr_name = all_instruments.get(task.instrument_id, "Unknown")
+        breakdown["by_instrument"][instr_name] = breakdown["by_instrument"].get(instr_name, 0) + 1
     
     return breakdown
 
@@ -836,31 +1211,51 @@ async def create_profile(profile: UserProfileCreate, db: Session = Depends(get_d
     return db_user_profile_to_pydantic(new_profile)
 
 @app.get("/api/profile")
-async def get_profile(user_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """Get user profile by user_id"""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
-    
-    profile = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    
-    return db_user_profile_to_pydantic(profile)
+async def get_profile(user_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Get user profile - for private app, returns first profile or creates default"""
+    if user_id:
+        profile = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        return db_user_profile_to_pydantic(profile)
+    else:
+        # Private app: get first profile or create default
+        profile = db.query(DBUserProfile).first()
+        if not profile:
+            # Create default profile
+            default_profile = DBUserProfile(
+                id=generate_uuid(),
+                name="User",
+                reminder_hours=24,
+                notifications_enabled=True
+            )
+            db.add(default_profile)
+            db.commit()
+            db.refresh(default_profile)
+            return db_user_profile_to_pydantic(default_profile)
+        return db_user_profile_to_pydantic(profile)
 
 @app.put("/api/profile")
-async def update_profile(profile: UserProfileUpdate, user_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """Update user profile - requires user_id"""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id is required")
-    
-    existing = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
-    if not existing:
-        # Provide more helpful error message
-        all_users = db.query(DBUserProfile).all()
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Profile not found for user_id: {user_id}. Database may have been reset. Please sign up again. (Found {len(all_users)} users in database)"
-        )
+async def update_profile(profile: UserProfileUpdate, user_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Update profile - for private app, updates first profile if user_id not provided"""
+    if user_id:
+        existing = db.query(DBUserProfile).filter(DBUserProfile.id == user_id).first()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Profile not found")
+    else:
+        # Private app: get first profile or create default
+        existing = db.query(DBUserProfile).first()
+        if not existing:
+            # Create default profile
+            existing = DBUserProfile(
+                id=generate_uuid(),
+                name=profile.name or "User",
+                reminder_hours=24,
+                notifications_enabled=True
+            )
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
     
     # Update all fields - frontend sends all fields, so update them all
     # Handle username (optional, not in profile form currently)
@@ -961,7 +1356,7 @@ async def update_profile(profile: UserProfileUpdate, user_id: Optional[str] = No
 async def export_ics(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    equipment_id: Optional[str] = None,
+    instrument_id: Optional[str] = None,
     task_type: Optional[TaskType] = None,
     db: Session = Depends(get_db)
 ):
@@ -972,24 +1367,24 @@ async def export_ics(
         query = query.filter(DBTaskOccurrence.due_date >= date.fromisoformat(start_date))
     if end_date:
         query = query.filter(DBTaskOccurrence.due_date <= date.fromisoformat(end_date))
-    if equipment_id:
-        query = query.filter(DBTaskOccurrence.equipment_id == equipment_id)
+    if instrument_id:
+        query = query.filter(DBTaskOccurrence.instrument_id == instrument_id)
     if task_type:
         query = query.filter(DBTaskOccurrence.task_type == task_type)
     
     tasks = query.all()
-    all_equipment = {eq.id: eq.name for eq in db.query(DBEquipment).all()}
+    all_instruments = {instr.id: instr.name for instr in db.query(DBInstrument).all()}
     
-    ics_content = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Instrument Hygiene//EN\n"
+    ics_content = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Practice Tracker//EN\n"
     
     for task in tasks:
-        eq_name = all_equipment.get(task.equipment_id, "Unknown")
+        instr_name = all_instruments.get(task.instrument_id, "Unknown")
         due_date_str = task.due_date.isoformat().replace("-", "")
         
         ics_content += f"""BEGIN:VEVENT
 DTSTART;VALUE=DATE:{due_date_str}
-SUMMARY:{task.task_type} - {eq_name}
-DESCRIPTION:Hygiene task for {eq_name}
+SUMMARY:{task.task_type} - {instr_name}
+DESCRIPTION:Practice session for {instr_name}
 END:VEVENT
 """
     
@@ -1004,17 +1399,17 @@ async def export_csv(db: Session = Depends(get_db)):
     output = StringIO()
     writer = csv.writer(output)
     
-    writer.writerow(["Date", "Equipment", "Task Type", "Completed", "Completed At", "Notes"])
+    writer.writerow(["Date", "Instrument", "Task Type", "Completed", "Completed At", "Notes"])
     
     tasks = db.query(DBTaskOccurrence).order_by(DBTaskOccurrence.due_date).all()
-    all_equipment = {eq.id: eq.name for eq in db.query(DBEquipment).all()}
+    all_instruments = {instr.id: instr.name for instr in db.query(DBInstrument).all()}
     
     for task in tasks:
-        eq_name = all_equipment.get(task.equipment_id, "Unknown")
+        instr_name = all_instruments.get(task.instrument_id, "Unknown")
         
         writer.writerow([
             task.due_date.isoformat(),
-            eq_name,
+            instr_name,
             task.task_type,
             "Yes" if task.completed else "No",
             task.completed_at.isoformat() if task.completed_at else "",
@@ -1027,7 +1422,7 @@ async def export_csv(db: Session = Depends(get_db)):
 @app.get("/api/export/json")
 async def export_json(db: Session = Depends(get_db)):
     """Export full backup as JSON"""
-    equipment = db.query(DBEquipment).all()
+    instruments = db.query(DBInstrument).all()
     task_definitions = db.query(DBTaskDefinition).all()
     task_occurrences = db.query(DBTaskOccurrence).all()
     task_completions = db.query(DBTaskCompletion).all()
@@ -1036,13 +1431,13 @@ async def export_json(db: Session = Depends(get_db)):
     # Convert to dict format
     backup = {
         "export_date": datetime.utcnow().isoformat(),
-        "equipment": [db_equipment_to_pydantic(eq).dict() for eq in equipment],
+        "instruments": [db_instrument_to_pydantic(instr).dict() for instr in instruments],
         "task_definitions": [db_task_definition_to_pydantic(td).dict() for td in task_definitions],
         "task_occurrences": [db_task_occurrence_to_pydantic(to).dict() for to in task_occurrences],
         "task_completions": [{
             "id": tc.id,
             "task_occurrence_id": tc.task_occurrence_id,
-            "equipment_id": tc.equipment_id,
+            "instrument_id": tc.instrument_id,
             "task_type": tc.task_type,
             "completed_at": tc.completed_at.isoformat() if tc.completed_at else None,
             "notes": tc.notes,
@@ -1064,7 +1459,7 @@ async def clear_all_data(confirm: bool = False, db: Session = Depends(get_db)):
     db.query(DBTaskCompletion).delete()
     db.query(DBTaskOccurrence).delete()
     db.query(DBTaskDefinition).delete()
-    db.query(DBEquipment).delete()
+    db.query(DBInstrument).delete()
     # Keep user profile or delete it too? Let's keep it for now
     # db.query(DBUserProfile).delete()
     

@@ -6,7 +6,7 @@ The database uses **SQLite** with **UUID primary keys** throughout. This design 
 
 ## Database Location
 
-- **File**: `backend/hygiene_tracker.db`
+- **File**: `backend/practice_tracker.db`
 - **Created**: Automatically when backend starts (`main.py` runs `init_db()`)
 - **Engine**: SQLAlchemy ORM with SQLite backend
 
@@ -17,7 +17,7 @@ The database has 5 main tables organized in a hierarchical relationship:
 ```
 UserProfile (Root)
     ↓ (1:many)
-Equipment
+Instrument
     ↓ (1:many)
 TaskDefinition
     ↓ (1:many)
@@ -30,8 +30,8 @@ TaskCompletion
 
 ```mermaid
 erDiagram
-    UserProfile ||--o{ Equipment : "has"
-    Equipment ||--o{ TaskDefinition : "defines"
+    UserProfile ||--o{ Instrument : "has"
+    Instrument ||--o{ TaskDefinition : "defines"
     TaskDefinition ||--o{ TaskOccurrence : "generates"
     TaskOccurrence ||--o{ TaskCompletion : "records"
     
@@ -47,7 +47,7 @@ erDiagram
         datetime updated_at
     }
     
-    Equipment {
+    Instrument {
         string id PK "UUID"
         string user_profile_id FK "nullable"
         string name "required"
@@ -59,7 +59,7 @@ erDiagram
     
     TaskDefinition {
         string id PK "UUID"
-        string equipment_id FK
+        string instrument_id FK
         string task_type "required"
         string frequency_type "required"
         integer frequency_value
@@ -70,7 +70,7 @@ erDiagram
     TaskOccurrence {
         string id PK "UUID"
         string task_definition_id FK
-        string equipment_id FK "denormalized"
+        string instrument_id FK "denormalized"
         date due_date "indexed"
         string task_type "denormalized"
         boolean completed
@@ -82,7 +82,7 @@ erDiagram
     TaskCompletion {
         string id PK "UUID"
         string task_occurrence_id FK
-        string equipment_id "denormalized"
+        string instrument_id "denormalized"
         string task_type "denormalized"
         datetime completed_at
         string notes
@@ -108,8 +108,8 @@ erDiagram
 - `notifications_enabled` - Boolean flag
 
 **Relationships**:
-- **Has many**: Equipment (cascade delete)
-- When user is deleted → all equipment is automatically deleted
+- **Has many**: Instrument (cascade delete)
+- When user is deleted → all instrument is automatically deleted
 
 **Operation**:
 - Created automatically on backend startup if none exists
@@ -118,16 +118,16 @@ erDiagram
 
 ---
 
-### 2. equipment
+### 2. instrument
 
-**Purpose**: Represents musical instruments or equipment items owned by a user.
+**Purpose**: Represents musical instruments or instrument items owned by a user.
 
 **Primary Key**: `id` (UUID string)
 
 **Foreign Keys**:
 - `user_profile_id` → `user_profile.id` (nullable)
-  - Links equipment to user
-  - Nullable allows equipment without a user (for backwards compatibility)
+  - Links instrument to user
+  - Nullable allows instrument without a user (for backwards compatibility)
 
 **Key Fields**:
 - `name` - Required (e.g., "Saxophone", "Trumpet")
@@ -140,19 +140,19 @@ erDiagram
 - **Has many**: TaskOccurrence (denormalized reference)
 
 **Cascade Behavior**:
-- Deleting user → deletes all equipment
-- Deleting equipment → deletes all task definitions
+- Deleting user → deletes all instrument
+- Deleting instrument → deletes all task definitions
 
 ---
 
 ### 3. task_definitions
 
-**Purpose**: Template/schedule for recurring maintenance tasks on equipment.
+**Purpose**: Template/schedule for recurring maintenance tasks on instrument.
 
 **Primary Key**: `id` (UUID string)
 
 **Foreign Keys**:
-- `equipment_id` → `equipment.id` (required)
+- `instrument_id` → `instrument.id` (required)
 
 **Key Fields**:
 - `task_type` - Enum: "Cleaning", "Drying", "Disinfecting", "Other"
@@ -164,14 +164,14 @@ erDiagram
 - `start_date` - Date when schedule begins
 
 **Relationships**:
-- **Belongs to**: Equipment (many-to-one)
+- **Belongs to**: Instrument (many-to-one)
 - **Generates**: TaskOccurrence (cascade delete)
 
 **Operation Example**:
 ```python
 # Create task definition: "Clean saxophone every 7 days starting Jan 1"
 TaskDefinition(
-    equipment_id="equipment-uuid",
+    instrument_id="instrument-uuid",
     task_type="Cleaning",
     frequency_type="days",
     frequency_value=7,
@@ -181,7 +181,7 @@ TaskDefinition(
 ```
 
 **Cascade Behavior**:
-- Deleting equipment → deletes all task definitions
+- Deleting instrument → deletes all task definitions
 - Deleting task definition → deletes all generated task occurrences
 
 ---
@@ -194,7 +194,7 @@ TaskDefinition(
 
 **Foreign Keys**:
 - `task_definition_id` → `task_definitions.id` (required)
-- `equipment_id` → `equipment.id` (required, **denormalized**)
+- `instrument_id` → `instrument.id` (required, **denormalized**)
 
 **Key Fields**:
 - `due_date` - **Indexed** for fast date range queries
@@ -206,26 +206,26 @@ TaskDefinition(
 
 **Denormalization Explained**:
 
-Why duplicate `equipment_id` and `task_type` here?
+Why duplicate `instrument_id` and `task_type` here?
 
-1. **Performance**: Queries like "get all tasks for equipment X" don't need JOIN
+1. **Performance**: Queries like "get all tasks for instrument X" don't need JOIN
 2. **Independence**: Task occurrence can be queried without joining to task_definition
 3. **Audit Trail**: If task_definition changes, historical occurrences keep original values
 
 **Relationships**:
 - **Belongs to**: TaskDefinition (many-to-one)
-- **Belongs to**: Equipment (many-to-one, denormalized)
+- **Belongs to**: Instrument (many-to-one, denormalized)
 - **Has many**: TaskCompletion (historical records)
 
 **Operation Flow**:
 ```python
 # When task definition is created:
-TaskDefinition(id="def-123", equipment_id="eq-456", task_type="Cleaning", ...)
+TaskDefinition(id="def-123", instrument_id="eq-456", task_type="Cleaning", ...)
     ↓
 # Backend generates occurrences:
-TaskOccurrence(id="occ-001", task_definition_id="def-123", equipment_id="eq-456", 
+TaskOccurrence(id="occ-001", task_definition_id="def-123", instrument_id="eq-456", 
                due_date="2025-01-01", task_type="Cleaning")
-TaskOccurrence(id="occ-002", task_definition_id="def-123", equipment_id="eq-456",
+TaskOccurrence(id="occ-002", task_definition_id="def-123", instrument_id="eq-456",
                due_date="2025-01-08", task_type="Cleaning")
 # ... and so on for 90 days ahead
 ```
@@ -245,7 +245,7 @@ TaskOccurrence(id="occ-002", task_definition_id="def-123", equipment_id="eq-456"
 - `task_occurrence_id` → `task_occurrences.id` (required)
 
 **Denormalized Fields**:
-- `equipment_id` - UUID (not a foreign key, just for queries)
+- `instrument_id` - UUID (not a foreign key, just for queries)
 - `task_type` - String (preserves task type at completion time)
 
 **Key Fields**:
@@ -269,7 +269,7 @@ TaskOccurrence.notes = "Cleaned thoroughly"
 # Create completion record:
 TaskCompletion(
     task_occurrence_id="occ-001",
-    equipment_id="eq-456",  # denormalized
+    instrument_id="eq-456",  # denormalized
     task_type="Cleaning",    # denormalized
     completed_at=now(),
     notes="Cleaned thoroughly",
@@ -303,12 +303,12 @@ id TEXT PRIMARY KEY  -- "550e8400-e29b-41d4-a716-446655440000"
 2. **Client-Side Generation**:
    ```javascript
    // Frontend can create ID before API call
-   const equipment = {
+   const instrument = {
        id: generateUUID(),  // Client generates!
        name: "Saxophone",
        ...
    };
-   fetch('/api/equipment', { method: 'POST', body: equipment });
+   fetch('/api/instrument', { method: 'POST', body: instrument });
    ```
 
 3. **Easy Merging**:
@@ -337,21 +337,21 @@ new_id = generate_uuid()
 
 ```mermaid
 flowchart TD
-    A[Delete UserProfile] -->|CASCADE| B[Delete All Equipment]
+    A[Delete UserProfile] -->|CASCADE| B[Delete All Instrument]
     B -->|CASCADE| C[Delete All TaskDefinitions]
     C -->|CASCADE| D[Delete All TaskOccurrences]
     
-    E[Delete Equipment] -->|CASCADE| C
+    E[Delete Instrument] -->|CASCADE| C
     F[Delete TaskDefinition] -->|CASCADE| D
 ```
 
 **Cascade Rules** (from `database.py`):
-- `UserProfile.equipment` → `cascade="all, delete-orphan"`
-- `Equipment.task_definitions` → `cascade="all, delete-orphan"`
+- `UserProfile.instrument` → `cascade="all, delete-orphan"`
+- `Instrument.task_definitions` → `cascade="all, delete-orphan"`
 - `TaskDefinition.task_occurrences` → `cascade="all, delete-orphan"`
 
 **What "delete-orphan" Means**:
-- If equipment is deleted → all its task definitions are deleted
+- If instrument is deleted → all its task definitions are deleted
 - If task definition is deleted → all its occurrences are deleted
 - Ensures data consistency (no orphaned records)
 
@@ -379,14 +379,14 @@ async def startup_event():
 
 ### Creating Records
 
-**Example: Add Equipment**
+**Example: Add Instrument**
 ```python
 # 1. Generate UUID
-equipment_id = generate_uuid()  # "abc-123-uuid"
+instrument_id = generate_uuid()  # "abc-123-uuid"
 
 # 2. Create record
-equipment = DBEquipment(
-    id=equipment_id,
+instrument = DBInstrument(
+    id=instrument_id,
     user_profile_id=user_id,  # Foreign key
     name="Saxophone",
     category="Woodwind",
@@ -394,17 +394,17 @@ equipment = DBEquipment(
 )
 
 # 3. Add to session and commit
-db.add(equipment)
+db.add(instrument)
 db.commit()
-db.refresh(equipment)  # Get updated timestamps
+db.refresh(instrument)  # Get updated timestamps
 ```
 
 ### Querying Records
 
-**Example: Get All Equipment for User**
+**Example: Get All Instrument for User**
 ```python
-equipment = db.query(DBEquipment).filter(
-    DBEquipment.user_profile_id == user_id
+instrument = db.query(DBInstrument).filter(
+    DBInstrument.user_profile_id == user_id
 ).all()
 ```
 
@@ -419,23 +419,23 @@ tasks = db.query(DBTaskOccurrence).filter(
 
 **Example: Join Query**
 ```python
-# Get equipment with its task definitions
-equipment = db.query(DBEquipment).options(
-    joinedload(DBEquipment.task_definitions)
+# Get instrument with its task definitions
+instrument = db.query(DBInstrument).options(
+    joinedload(DBInstrument.task_definitions)
 ).filter(
-    DBEquipment.id == equipment_id
+    DBInstrument.id == instrument_id
 ).first()
 ```
 
 ### Updating Records
 
 ```python
-equipment = db.query(DBEquipment).filter(
-    DBEquipment.id == equipment_id
+instrument = db.query(DBInstrument).filter(
+    DBInstrument.id == instrument_id
 ).first()
 
-equipment.name = "New Name"
-equipment.updated_at = datetime.utcnow()  # Auto-updated
+instrument.name = "New Name"
+instrument.updated_at = datetime.utcnow()  # Auto-updated
 
 db.commit()
 ```
@@ -443,11 +443,11 @@ db.commit()
 ### Deleting Records
 
 ```python
-equipment = db.query(DBEquipment).filter(
-    DBEquipment.id == equipment_id
+instrument = db.query(DBInstrument).filter(
+    DBInstrument.id == instrument_id
 ).first()
 
-db.delete(equipment)
+db.delete(instrument)
 # Cascade delete automatically removes:
 # - All task definitions
 # - All task occurrences
@@ -485,7 +485,7 @@ SQLite automatically creates indexes for:
    ```
 
 2. **Denormalization** improves read performance
-   - `TaskOccurrence.equipment_id` (denormalized) avoids JOIN
+   - `TaskOccurrence.instrument_id` (denormalized) avoids JOIN
    - `TaskOccurrence.task_type` (denormalized) avoids JOIN
 
 3. **Limit results** for large datasets
@@ -497,7 +497,7 @@ SQLite automatically creates indexes for:
 
 ## Data Flow Example
 
-### Complete Workflow: Creating Equipment with Task Schedule
+### Complete Workflow: Creating Instrument with Task Schedule
 
 ```mermaid
 sequenceDiagram
@@ -506,12 +506,12 @@ sequenceDiagram
     participant Backend
     participant Database
     
-    User->>Frontend: Add Equipment "Saxophone"
-    Frontend->>Backend: POST /api/equipment
-    Backend->>Database: INSERT INTO equipment
+    User->>Frontend: Add Instrument "Saxophone"
+    Frontend->>Backend: POST /api/instrument
+    Backend->>Database: INSERT INTO instrument
     Note over Database: Generate UUID: "eq-abc-123"
-    Database-->>Backend: Equipment created
-    Backend-->>Frontend: Return equipment (with UUID)
+    Database-->>Backend: Instrument created
+    Backend-->>Frontend: Return instrument (with UUID)
     
     User->>Frontend: Add Task "Clean every 7 days"
     Frontend->>Backend: POST /api/task-definitions
@@ -540,18 +540,18 @@ sequenceDiagram
 
 1. **UUID Primary Keys**: Enable offline sync without ID collisions
 2. **Cascade Deletes**: Maintain data consistency automatically
-3. **Denormalization**: Improve query performance (equipment_id, task_type in TaskOccurrence)
+3. **Denormalization**: Improve query performance (instrument_id, task_type in TaskOccurrence)
 4. **Separate Completion Table**: Preserve audit trail independently
 5. **Date Indexing**: Fast queries for "tasks due today/overdue"
 
 **Database File**:
-- Location: `backend/hygiene_tracker.db`
+- Location: `backend/practice_tracker.db`
 - Format: SQLite (single file database)
 - Size: Grows as data is added
 - Backup: Simply copy the `.db` file
 
 **Viewing the Database**:
 - Web: http://localhost:8000/admin/db-viewer
-- DB Browser: Open `backend/hygiene_tracker.db`
-- Command Line: `sqlite3 backend/hygiene_tracker.db`
+- DB Browser: Open `backend/practice_tracker.db`
+- Command Line: `sqlite3 backend/practice_tracker.db`
 

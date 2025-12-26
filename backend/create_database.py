@@ -4,7 +4,7 @@ Run this to generate the database file for inspection.
 """
 
 from database import init_db, engine, Base
-from database import UserProfile, Equipment, TaskDefinition, TaskOccurrence, TaskCompletion
+from database import UserProfile, Instrument, TaskDefinition, TaskOccurrence, TaskCompletion
 from sqlalchemy import inspect
 from uuid_utils import generate_uuid
 from datetime import date
@@ -14,7 +14,7 @@ def create_database():
     print("Creating database schema...")
     init_db()
     print("✓ Database schema created successfully!")
-    print(f"Database file: hygiene_tracker.db\n")
+    print(f"Database file: practice_tracker.db\n")
 
 def inspect_database():
     """Inspect and display database structure"""
@@ -64,8 +64,8 @@ def inspect_database():
     print("RELATIONSHIP DIAGRAM")
     print("=" * 80)
     print("""
-UserProfile (1) ──→ (many) Equipment
-Equipment (1) ──→ (many) TaskDefinition
+UserProfile (1) ──→ (many) Instrument
+Instrument (1) ──→ (many) TaskDefinition
 TaskDefinition (1) ──→ (many) TaskOccurrence
 TaskOccurrence (1) ──→ (many) TaskCompletion
     """)
@@ -87,21 +87,21 @@ def create_sample_data():
         db.add(user)
         db.flush()  # Get the ID
         
-        # Create sample equipment
-        equipment = Equipment(
+        # Create sample instrument
+        instrument = Instrument(
             id=generate_uuid(),
             user_profile_id=user.id,
             name="Trumpet",
             category="Brass",
             notes="My main instrument"
         )
-        db.add(equipment)
+        db.add(instrument)
         db.flush()
         
         # Create sample task definition
         task_def = TaskDefinition(
             id=generate_uuid(),
-            equipment_id=equipment.id,
+            instrument_id=instrument.id,
             task_type="Cleaning",
             frequency_type="days",
             frequency_value=7,
@@ -114,7 +114,7 @@ def create_sample_data():
         task_occur = TaskOccurrence(
             id=generate_uuid(),
             task_definition_id=task_def.id,
-            equipment_id=equipment.id,
+            instrument_id=instrument.id,
             due_date=date.today(),
             task_type="Cleaning"
         )
@@ -124,7 +124,7 @@ def create_sample_data():
         db.commit()
         print("✓ Sample data created!")
         print(f"  User Profile: {user.id}")
-        print(f"  Equipment: {equipment.id}")
+        print(f"  Instrument: {instrument.id}")
         print(f"  Task Definition: {task_def.id}")
         print(f"  Task Occurrence: {task_occur.id}")
     except Exception as e:
@@ -155,5 +155,5 @@ if __name__ == "__main__":
         print("\n✓ Database schema created (empty database)")
         print("  Run with --with-samples flag to add sample data")
     
-    print("  Open hygiene_tracker.db with DB Browser for SQLite or sqlite3")
+    print("  Open practice_tracker.db with DB Browser for SQLite or sqlite3")
 

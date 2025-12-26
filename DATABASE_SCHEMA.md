@@ -26,7 +26,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
                │
                ▼
 ┌─────────────────────────────────────┐
-│         Equipment                   │
+│         Instrument                   │
 │  ┌─────────────────────────────┐   │
 │  │ id (UUID) [PK]              │   │
 │  │ user_profile_id (UUID) [FK] │───┘
@@ -46,7 +46,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 │      TaskDefinition                 │
 │  ┌─────────────────────────────┐   │
 │  │ id (UUID) [PK]              │   │
-│  │ equipment_id (UUID) [FK]    │───┘
+│  │ instrument_id (UUID) [FK]    │───┘
 │  │ task_type                   │   │
 │  │ frequency_type              │   │
 │  │ frequency_value             │   │
@@ -64,7 +64,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 │  ┌─────────────────────────────┐   │
 │  │ id (UUID) [PK]              │   │
 │  │ task_definition_id (UUID)FK │───┘
-│  │ equipment_id (UUID) [FK]    │───┐
+│  │ instrument_id (UUID) [FK]    │───┐
 │  │ due_date [INDEXED]          │   │
 │  │ task_type                   │   │
 │  │ completed                   │   │
@@ -83,7 +83,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 │  ┌─────────────────────────────┐   │
 │  │ id (UUID) [PK]              │   │
 │  │ task_occurrence_id (UUID)FK │───┘
-│  │ equipment_id (UUID)         │───┐
+│  │ instrument_id (UUID)         │───┐
 │  │ task_type                   │   │
 │  │ completed_at                │   │
 │  │ notes (nullable)            │   │
@@ -107,12 +107,12 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 | created_at | DATETIME | DEFAULT NOW | Creation timestamp |
 | updated_at | DATETIME | DEFAULT NOW | Last update timestamp |
 
-### 2. equipment
+### 2. instrument
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | TEXT (UUID) | PRIMARY KEY | Unique identifier |
-| user_profile_id | TEXT (UUID) | FOREIGN KEY → user_profile.id, NULL | Owner of equipment |
-| name | TEXT | NOT NULL | Equipment name |
+| user_profile_id | TEXT (UUID) | FOREIGN KEY → user_profile.id, NULL | Owner of instrument |
+| name | TEXT | NOT NULL | Instrument name |
 | category | TEXT | NOT NULL | Category enum (Woodwind, Brass, etc.) |
 | notes | TEXT | NULL | Additional notes |
 | created_at | DATETIME | DEFAULT NOW | Creation timestamp |
@@ -122,7 +122,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | TEXT (UUID) | PRIMARY KEY | Unique identifier |
-| equipment_id | TEXT (UUID) | FOREIGN KEY → equipment.id | Equipment this task is for |
+| instrument_id | TEXT (UUID) | FOREIGN KEY → instrument.id | Instrument this task is for |
 | task_type | TEXT | NOT NULL | Task type enum (Cleaning, Drying, etc.) |
 | frequency_type | TEXT | NOT NULL | Frequency enum (days, weekly, monthly) |
 | frequency_value | INTEGER | NOT NULL | N days, or 1 for weekly/monthly |
@@ -134,7 +134,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 |--------|------|-------------|-------------|
 | id | TEXT (UUID) | PRIMARY KEY | Unique identifier |
 | task_definition_id | TEXT (UUID) | FOREIGN KEY → task_definitions.id | Parent task definition |
-| equipment_id | TEXT (UUID) | FOREIGN KEY → equipment.id | Equipment (denormalized) |
+| instrument_id | TEXT (UUID) | FOREIGN KEY → instrument.id | Instrument (denormalized) |
 | due_date | DATE | NOT NULL, INDEXED | When task is due |
 | task_type | TEXT | NOT NULL | Task type (denormalized) |
 | completed | BOOLEAN | DEFAULT FALSE | Completion status |
@@ -147,7 +147,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 |--------|------|-------------|-------------|
 | id | TEXT (UUID) | PRIMARY KEY | Unique identifier |
 | task_occurrence_id | TEXT (UUID) | FOREIGN KEY → task_occurrences.id | Completed task |
-| equipment_id | TEXT (UUID) | NOT NULL | Equipment (denormalized for queries) |
+| instrument_id | TEXT (UUID) | NOT NULL | Instrument (denormalized for queries) |
 | task_type | TEXT | NOT NULL | Task type (denormalized) |
 | completed_at | DATETIME | DEFAULT NOW | Completion timestamp |
 | notes | TEXT | NULL | Completion notes |
@@ -155,13 +155,13 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 
 ## Relationships
 
-1. **UserProfile → Equipment** (1:many)
-   - One user can have many equipment items
-   - Cascade delete: deleting user deletes all equipment
+1. **UserProfile → Instrument** (1:many)
+   - One user can have many instrument items
+   - Cascade delete: deleting user deletes all instrument
 
-2. **Equipment → TaskDefinition** (1:many)
-   - One equipment item can have many task definitions
-   - Cascade delete: deleting equipment deletes all task definitions
+2. **Instrument → TaskDefinition** (1:many)
+   - One instrument item can have many task definitions
+   - Cascade delete: deleting instrument deletes all task definitions
 
 3. **TaskDefinition → TaskOccurrence** (1:many)
    - One task definition generates many task occurrences
@@ -175,7 +175,7 @@ SQLite database using **UUID primary keys** for offline-sync capability. All pri
 - **Offline Sync**: Devices can create records offline without ID collisions
 - **Client-side Generation**: Generate IDs before sending to server
 - **Conflict-free Merges**: Multiple devices can create records simultaneously
-- **Photo Sync**: Photos can reference equipment/tasks by UUID before upload
+- **Photo Sync**: Photos can reference instrument/tasks by UUID before upload
 - **Future Scalability**: Easy to sync with remote server
 
 ## Indexes
@@ -199,7 +199,7 @@ python create_database.py --with-samples
 ```
 
 Then inspect with:
-- DB Browser for SQLite: Open `backend/hygiene_tracker.db`
-- SQLite command line: `sqlite3 backend/hygiene_tracker.db`
+- DB Browser for SQLite: Open `backend/practice_tracker.db`
+- SQLite command line: `sqlite3 backend/practice_tracker.db`
 - Web viewer: `http://127.0.0.1:8000/admin/db-viewer` (after starting backend)
 

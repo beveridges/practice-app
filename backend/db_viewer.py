@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from database import Equipment, TaskDefinition, TaskOccurrence, TaskCompletion, UserProfile
+from database import Instrument, TaskDefinition, TaskOccurrence, TaskCompletion, UserProfile
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def db_viewer(db: Session = Depends(get_db)):
     """Simple HTML viewer for the database"""
     
     # Get all data
-    equipment = db.query(Equipment).all()
+    instruments = db.query(Instrument).all()
     task_defs = db.query(TaskDefinition).all()
     task_occurrences = db.query(TaskOccurrence).all()
     task_completions = db.query(TaskCompletion).all()
@@ -27,7 +27,7 @@ async def db_viewer(db: Session = Depends(get_db)):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Database Viewer - Hygiene Tracker</title>
+        <title>Database Viewer - Practice Tracker</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
             h1 { color: #2C5530; }
@@ -76,10 +76,10 @@ async def db_viewer(db: Session = Depends(get_db)):
         html += "<tr><td colspan='7'>No profile found</td></tr>"
     html += "</table></div>"
     
-    # Equipment
+    # Instruments
     html += f"""
     <div class="section">
-        <h2>Equipment <span class="count">{len(equipment)}</span></h2>
+        <h2>Instruments <span class="count">{len(instruments)}</span></h2>
         <table>
             <tr>
                 <th>ID (UUID)</th>
@@ -90,15 +90,15 @@ async def db_viewer(db: Session = Depends(get_db)):
                 <th>Created</th>
             </tr>
     """
-    for eq in equipment:
+    for instr in instruments:
         html += f"""
             <tr>
-                <td>{eq.id[:8]}...</td>
-                <td>{eq.user_profile_id[:8] + '...' if eq.user_profile_id else 'None'}</td>
-                <td>{eq.name}</td>
-                <td>{eq.category}</td>
-                <td>{eq.notes or ''}</td>
-                <td>{eq.created_at.strftime('%Y-%m-%d %H:%M') if eq.created_at else ''}</td>
+                <td>{instr.id[:8]}...</td>
+                <td>{instr.user_profile_id[:8] + '...' if instr.user_profile_id else 'None'}</td>
+                <td>{instr.name}</td>
+                <td>{instr.category}</td>
+                <td>{instr.notes or ''}</td>
+                <td>{instr.created_at.strftime('%Y-%m-%d %H:%M') if instr.created_at else ''}</td>
             </tr>
         """
     html += "</table></div>"
@@ -110,7 +110,7 @@ async def db_viewer(db: Session = Depends(get_db)):
         <table>
             <tr>
                 <th>ID (UUID)</th>
-                <th>Equipment ID</th>
+                <th>Instrument ID</th>
                 <th>Task Type</th>
                 <th>Frequency</th>
                 <th>Start Date</th>
@@ -120,7 +120,7 @@ async def db_viewer(db: Session = Depends(get_db)):
         html += f"""
             <tr>
                 <td>{td.id[:8]}...</td>
-                <td>{td.equipment_id[:8]}...</td>
+                <td>{td.instrument_id[:8]}...</td>
                 <td>{td.task_type}</td>
                 <td>{td.frequency_type} ({td.frequency_value})</td>
                 <td>{td.start_date}</td>
@@ -135,7 +135,7 @@ async def db_viewer(db: Session = Depends(get_db)):
         <table>
             <tr>
                 <th>ID (UUID)</th>
-                <th>Equipment ID</th>
+                <th>Instrument ID</th>
                 <th>Due Date</th>
                 <th>Task Type</th>
                 <th>Completed</th>
@@ -146,7 +146,7 @@ async def db_viewer(db: Session = Depends(get_db)):
         html += f"""
             <tr>
                 <td>{to.id[:8]}...</td>
-                <td>{to.equipment_id[:8]}...</td>
+                <td>{to.instrument_id[:8]}...</td>
                 <td>{to.due_date}</td>
                 <td>{to.task_type}</td>
                 <td>{'✅' if to.completed else '❌'}</td>
@@ -163,7 +163,7 @@ async def db_viewer(db: Session = Depends(get_db)):
             <tr>
                 <th>ID (UUID)</th>
                 <th>Task Occurrence ID</th>
-                <th>Equipment ID</th>
+                <th>Instrument ID</th>
                 <th>Completed At</th>
                 <th>Notes</th>
             </tr>
@@ -173,7 +173,7 @@ async def db_viewer(db: Session = Depends(get_db)):
             <tr>
                 <td>{tc.id[:8]}...</td>
                 <td>{tc.task_occurrence_id[:8]}...</td>
-                <td>{tc.equipment_id[:8]}...</td>
+                <td>{tc.instrument_id[:8]}...</td>
                 <td>{tc.completed_at.strftime('%Y-%m-%d %H:%M') if tc.completed_at else ''}</td>
                 <td>{tc.notes or ''}</td>
             </tr>

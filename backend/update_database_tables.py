@@ -4,12 +4,12 @@ This will drop all old tables and recreate with new names
 """
 
 from database import Base, engine, init_db
-from database import UserProfile, Equipment, TaskDefinition, TaskOccurrence, TaskCompletion
+from database import UserProfile, Instrument, TaskDefinition, TaskOccurrence, TaskCompletion
 import sqlite3
 
 def check_current_tables():
     """Check what tables currently exist"""
-    conn = sqlite3.connect('hygiene_tracker.db')
+    conn = sqlite3.connect('practice_tracker.db')
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = [row[0] for row in cursor.fetchall()]
@@ -35,7 +35,7 @@ def recreate_database():
         print(f"  - {table}")
     
     print("\n✅ Database updated successfully!")
-    print("Expected tables: UserProfile, Equipment, TaskDefinitions, TaskOccurrences, TaskCompletions")
+    print("Expected tables: UserProfile, Instrument, TaskDefinitions, TaskOccurrences, TaskCompletions")
 
 if __name__ == "__main__":
     recreate_database()

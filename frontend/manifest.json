@@ -1,7 +1,7 @@
 {
-  "name": "Instrument Hygiene Tracker",
-  "short_name": "Hygiene",
-  "description": "Track and schedule hygiene maintenance for your musical instruments",
+  "name": "Practice Tracker",
+  "short_name": "Practice",
+  "description": "Track and schedule practice and maintenance for your musical instruments",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="Track and schedule hygiene maintenance for your musical instruments">
+    <meta name="description" content="Track and schedule practice and maintenance for your musical instruments">
     <meta name="theme-color" content="#2C5530">
     
     <!-- PWA Manifest -->
@@ -12,102 +12,122 @@
     <!-- Apple Touch Icon -->
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
     
-    <title>Instrument Hygiene Tracker</title>
+    <title>Practice Tracker</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <h1>🎵 Instrument Hygiene</h1>
+            <div id="total-practice-time" class="total-practice-time" style="display: flex; align-items: center; justify-content: center; gap: 1rem; cursor: pointer; flex: 1;" title="Double-click to show reset option">
+                <span id="total-time-display" class="total-time-value">00:00:00</span>
+                <button id="history-total-time-btn" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2;" title="View contribution history">
+                    <img src="/img/icons/history.png" alt="History" style="width: 16px; height: 16px; filter: brightness(0) invert(1);">
+                </button>
+                <button id="reset-total-time-btn" class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2; display: none;" title="Reset total practice time to zero">Reset</button>
+            </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button id="install-btn" class="install-btn" style="display: none;">
                     Install App
                 </button>
-                <div id="profile-icon" class="profile-icon" title="View Profile">
-                    <span id="profile-initials">👤</span>
+                <div id="status" class="status-indicator" title="Connection Status">
+                    <img id="status-icon" src="/img/icons/fall-out_boy_normal.png" alt="Status" class="status-icon">
                 </div>
             </div>
         </header>
 
         <!-- Navigation Tabs -->
         <nav class="app-nav">
-            <button class="nav-btn" data-view="signin">Sign In</button>
-            <button class="nav-btn" data-view="equipment">Equipment</button>
-            <button class="nav-btn" data-view="tasks">Tasks</button>
+            <button class="nav-btn" data-view="instruments">Instrument</button>
+            <button class="nav-btn" data-view="tasks">Session</button>
             <button class="nav-btn active" data-view="calendar">Calendar</button>
-            <button class="nav-btn" data-view="achievements">Achievements</button>
+            <button class="nav-btn" data-view="stats">Stats</button>
         </nav>
 
         <!-- Main Content -->
         <main class="app-main">
-            <!-- Status Indicator -->
-            <div id="status" class="status-indicator">
-                <span id="status-text">Connecting...</span>
-            </div>
-
-            <!-- Sign In / Create Account View -->
-            <div id="signin-view" class="view">
-                <div class="auth-container">
-                    <div class="auth-card">
-                        <h2 id="auth-title">Sign In</h2>
-                        <form id="signin-form">
-                            <div class="form-group">
-                                <label for="signin-email">Email</label>
-                                <input type="email" id="signin-email" placeholder="Enter your email" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="signin-password">Password</label>
-                                <input type="password" id="signin-password" placeholder="Enter your password" required>
-                            </div>
-                            <button type="submit" class="btn btn-signin">Sign In</button>
-                        </form>
-                        <p class="auth-switch">
-                            Don't have an account? <a href="#" id="switch-to-signup">Create Account</a>
-                        </p>
-                    </div>
-
-                    <div class="auth-card" id="signup-card" style="display: none;">
-                        <h2 id="auth-title-signup">Create Account</h2>
-                        <form id="signup-form">
-                            <div class="form-group">
-                                <label for="signup-name">Name</label>
-                                <input type="text" id="signup-name" placeholder="Enter your name" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="signup-email">Email</label>
-                                <input type="email" id="signup-email" placeholder="Enter your email" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="signup-password">Password</label>
-                                <input type="password" id="signup-password" placeholder="Enter your password" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="signup-password-confirm">Confirm Password</label>
-                                <input type="password" id="signup-password-confirm" placeholder="Confirm your password" required>
-                            </div>
-                            <button type="submit" class="btn btn-signup">Sign Up</button>
-                            <button type="button" class="btn btn-secondary" onclick="simulateSignupData()" style="margin-top: 0.5rem; width: 100%;">SIMULATE DATA</button>
-                        </form>
-                        <p style="text-align: center; margin-top: 1rem;">
-                            <a href="#" id="privacy-link" class="privacy-link" onclick="event.preventDefault(); switchView('credits'); return false;">Privacy</a>
-                        </p>
-                        <p class="auth-switch">
-                            <a href="#" id="switch-to-signin">Return to Login</a>
-                        </p>
-                    </div>
-                </div>
-                
+            <!-- Add Session Button -->
+            <div style="margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="createTaskFromCalendar(null)" style="width: 100%; padding: 1.25rem; font-size: 1.25rem; font-weight: 600;">+ Add Session</button>
             </div>
 
             <!-- Calendar View -->
             <div id="calendar-view" class="view active">
-                <div class="calendar-header">
-                    <button id="prev-month" class="btn-icon">←</button>
-                    <h2 id="current-month"></h2>
-                    <button id="next-month" class="btn-icon">→</button>
+                <!-- View Switcher -->
+                <div class="calendar-view-switcher">
+                    <button class="view-switch-btn active" data-view="day">Day</button>
+                    <button class="view-switch-btn" data-view="week">Week</button>
+                    <button class="view-switch-btn" data-view="month">Month</button>
                 </div>
-                <div id="calendar-grid" class="calendar-grid"></div>
+                
+                <!-- Calendar Header -->
+                <div class="calendar-header">
+                    <button id="prev-period" class="btn-icon">←</button>
+                    <h2 id="current-period"></h2>
+                    <button id="next-period" class="btn-icon">→</button>
+                    <button id="today-btn" class="btn btn-secondary btn-small">Today</button>
+                </div>
+                
+                <!-- Filter Panel -->
+                <div class="filter-panel">
+                    <button id="filter-toggle" class="btn btn-secondary btn-small">Filters</button>
+                    <div id="filter-content" class="filter-content" style="display: none;">
+                        <div class="filter-group">
+                            <label>Instrument:</label>
+                            <select id="filter-instruments" multiple class="filter-select">
+                                <option value="">All Instruments</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Task Type:</label>
+                            <div class="filter-checkboxes">
+                                <label><input type="checkbox" class="filter-task-type" value="Practice" checked> Practice</label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>
+                                <input type="checkbox" id="filter-show-completed" checked> Show Completed
+                            </label>
+                        </div>
+                        <button id="clear-filters" class="btn btn-secondary btn-small">Clear Filters</button>
+                    </div>
+                </div>
+                
+                <!-- Mini Calendar (collapsible) -->
+                <div class="mini-calendar-container">
+                    <button id="mini-calendar-toggle" class="btn btn-secondary btn-small">📅 Mini Calendar</button>
+                    <div id="mini-calendar" class="mini-calendar" style="display: none;"></div>
+                </div>
+                
+                <!-- Calendar Views Container -->
+                <div id="calendar-views-container">
+                    <!-- Day View -->
+                    <div id="day-view" class="calendar-view-content day-view" style="display: none;">
+                        <div class="day-view-header">
+                            <div class="day-view-date"></div>
+                            <button class="btn btn-primary btn-small" onclick="createTaskFromCalendar(null)">+ Add Session</button>
+                        </div>
+                        <div class="all-day-tasks-section">
+                            <div class="all-day-label">All Day</div>
+                            <div id="all-day-tasks" class="all-day-tasks"></div>
+                        </div>
+                        <div class="time-slots-container">
+                            <div id="time-slots" class="time-slots"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Week View -->
+                    <div id="week-view" class="calendar-view-content week-view" style="display: none;">
+                        <div class="week-view-grid" id="week-view-grid"></div>
+                    </div>
+                    
+                    <!-- Month View -->
+                    <div id="month-view" class="calendar-view-content month-view">
+                        <div id="calendar-grid" class="calendar-grid"></div>
+                    </div>
+                </div>
+                
+                <!-- Selected Date Tasks -->
                 <div id="selected-date-tasks" class="selected-date-tasks"></div>
             </div>
 
@@ -123,30 +143,32 @@
                 </div>
             </div>
 
-            <!-- Equipment View -->
-            <div id="equipment-view" class="view">
-                <div class="equipment-view-container">
-                    <button id="add-equipment-btn" class="btn btn-primary">+ Add Equipment</button>
+            <!-- Instrument View -->
+            <div id="instruments-view" class="view">
+                <div class="instruments-view-container">
+                    <button id="add-instruments-btn" class="btn btn-primary">+ Add Instrument</button>
                     <div id="quick-add-instruments" class="quick-add-instruments">
                         <!-- Quick-add buttons for user's instruments will be populated here -->
                     </div>
-                    <div id="equipment-list" class="equipment-list"></div>
+                    <div id="instruments-list" class="instruments-list"></div>
                 </div>
             </div>
 
-            <!-- Achievements View -->
-            <div id="achievements-view" class="view">
+            <!-- Stats View -->
+            <div id="stats-view" class="view">
                 <div class="analytics-section">
                     <h3>Completion Streak</h3>
-                    <div class="streak-display" id="streak-display">0 days</div>
+                    <div id="streak-gauge"></div>
+                    <div class="streak-display" id="streak-display" style="margin-top: 2rem;">0 days</div>
                 </div>
                 <div class="analytics-section">
                     <h3>Completion Rate</h3>
-                    <div id="completion-rate"></div>
+                    <div id="completion-rate-gauge"></div>
+                    <div id="completion-rate" style="margin-top: 2rem;"></div>
                 </div>
                 <div class="analytics-section">
-                    <h3>Equipment Scores</h3>
-                    <div id="equipment-scores"></div>
+                    <h3>Instrument Scores</h3>
+                    <div id="instrument-scores"></div>
                 </div>
             </div>
 
@@ -259,9 +281,6 @@
                         </div>
                     </div>
                     
-                    <div class="profile-section">
-                        <button class="btn btn-danger" onclick="signOut()">Sign Out</button>
-                    </div>
                     
                     <!-- Legal/Attribution/Credits Link -->
                     <div class="profile-section" style="margin-top: 2rem; text-align: center; padding-top: 2rem; border-top: 1px solid var(--border-color);">
@@ -324,20 +343,20 @@
         <!-- Footer -->
         <!-- Bottom Navigation Menu -->
         <nav class="app-bottom-nav">
-            <button class="bottom-nav-btn" data-view="signin" title="Sign In">
-                <img src="/img/icons/Profile.png" alt="Sign In" class="bottom-nav-icon" />
+            <button class="bottom-nav-btn" data-view="profile" title="Profile">
+                <img src="/img/icons/Profile.png" alt="Profile" class="bottom-nav-icon" />
             </button>
-            <button class="bottom-nav-btn" data-view="equipment" title="Equipment">
-                <img src="/img/icons/Equipment.png" alt="Equipment" class="bottom-nav-icon" />
+            <button class="bottom-nav-btn" data-view="instruments" title="Instrument">
+                <img src="/img/icons/Equipment.png" alt="Instrument" class="bottom-nav-icon" />
             </button>
             <button class="bottom-nav-btn active" data-view="calendar" title="Calendar">
                 <img src="/img/icons/Calendar.png" alt="Calendar" class="bottom-nav-icon" />
             </button>
-            <button class="bottom-nav-btn" data-view="tasks" title="Tasks">
-                <img src="/img/icons/Tasks.png" alt="Tasks" class="bottom-nav-icon" />
+            <button class="bottom-nav-btn" data-view="tasks" title="Session">
+                <img src="/img/icons/Tasks.png" alt="Session" class="bottom-nav-icon" />
             </button>
-            <button class="bottom-nav-btn" data-view="achievements" title="Achievements">
-                <img src="/img/icons/Progress.png" alt="Achievements" class="bottom-nav-icon" />
+            <button class="bottom-nav-btn" data-view="stats" title="Stats">
+                <img src="/img/icons/Progress.png" alt="Stats" class="bottom-nav-icon" />
             </button>
         </nav>
         
@@ -349,17 +368,17 @@
     </div>
 
     <!-- Modals -->
-    <!-- Add Equipment Modal -->
-    <div id="equipment-modal" class="modal">
+    <!-- Add Instrument Modal -->
+    <div id="instruments-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close">&times;</span>
-            <h2 id="equipment-modal-title">Add Equipment</h2>
-            <form id="equipment-form">
-                <input type="text" id="equipment-name" placeholder="Equipment name" list="equipment-name-suggestions" required>
-                <datalist id="equipment-name-suggestions">
+            <h2 id="instruments-modal-title">Add Instrument</h2>
+            <form id="instruments-form">
+                <input type="text" id="instrument-name" placeholder="Instrument name" list="instrument-name-suggestions" required>
+                <datalist id="instrument-name-suggestions">
                     <!-- Options will be populated from user's profile instruments -->
                 </datalist>
-                <select id="equipment-category" required>
+                <select id="instrument-category" required>
                     <option value="">Select category...</option>
                     <option value="Woodwind">Woodwind</option>
                     <option value="Brass">Brass</option>
@@ -369,11 +388,11 @@
                     <option value="Storage/Case">Storage/Case</option>
                     <option value="Other">Other</option>
                 </select>
-                <select id="equipment-instrument-type" required>
+                <select id="instrument-instrument-type" required>
                     <option value="Primary">Primary Instrument</option>
                     <option value="Secondary">Secondary Instrument</option>
                 </select>
-                <textarea id="equipment-notes" placeholder="Notes (optional)" rows="3"></textarea>
+                <textarea id="instrument-notes" placeholder="Notes (optional)" rows="3"></textarea>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save</button>
@@ -386,17 +405,13 @@
     <div id="task-def-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close">&times;</span>
-            <h2>Add Hygiene Task</h2>
+            <h2>Add Practice Session</h2>
             <form id="task-def-form">
-                <select id="task-equipment" required>
-                    <option value="">Select equipment...</option>
+                <select id="task-instrument" required>
+                    <option value="">Select instrument...</option>
                 </select>
                 <select id="task-type" required>
-                    <option value="">Select task type...</option>
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="Drying">Drying</option>
-                    <option value="Disinfecting">Disinfecting</option>
-                    <option value="Other">Other</option>
+                    <option value="Practice" selected>Practice</option>
                 </select>
                 <div class="form-row">
                     <select id="task-frequency-type" required>
@@ -409,7 +424,7 @@
                 <input type="date" id="task-start-date" required>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Task</button>
+                    <button type="submit" class="btn btn-primary">Create Session</button>
                 </div>
             </form>
         </div>
@@ -419,14 +434,114 @@
     <div id="complete-task-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close">&times;</span>
-            <h2>Complete Task</h2>
+            <h2>Complete Session</h2>
             <form id="complete-task-form">
                 <div id="complete-task-info"></div>
                 <textarea id="complete-task-notes" placeholder="Notes (optional)" rows="3"></textarea>
                 <input type="file" id="complete-task-photo" accept="image/*">
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Mark Complete</button>
+                    <button type="submit" class="btn btn-primary">Mark Session Complete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contribution History Modal -->
+    <div id="contribution-history-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="modal-close">&times;</span>
+            <h2 style="display: flex; align-items: center; gap: 0.5rem;">
+                <img src="/img/icons/history.png" alt="History" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
+                Contribution History
+            </h2>
+            <div id="contribution-history-content" style="margin-top: 1.5rem;">
+                <div id="contribution-history-loading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Loading history...
+                </div>
+                <div id="contribution-history-list" style="display: none;"></div>
+                <div id="contribution-history-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No contributions yet</p>
+                    <p style="font-size: 0.9rem;">Start a practice session timer to log time!</p>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <button type="button" class="btn btn-secondary modal-cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Task Modal (from calendar) -->
+    <div id="quick-add-task-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="quick-add-task-modal-title">Add Session</h2>
+            <form id="quick-add-task-form">
+                <div class="form-group">
+                    <label for="quick-task-date">Date & Time</label>
+                    <input type="datetime-local" id="quick-task-date" step="0.001" required>
+                    <div id="full-datetime-display" style="margin-top: 0.5rem; padding: 0.5rem; background: var(--background); border-radius: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        <strong>Full Precision:</strong> <span id="full-datetime-text">-</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="quick-task-instrument">Instrument</label>
+                    <select id="quick-task-instrument" required>
+                        <option value="">Select instrument...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quick-task-type">Practice Type</label>
+                    <select id="quick-task-type" required>
+                        <option value="" disabled selected>Select practice type...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label id="timer-label">Practice Timer</label>
+                    <!-- Timer container (shown in Add mode) -->
+                    <div id="timer-container" style="display: flex; flex-direction: column; gap: 0.75rem; align-items: center; padding: 1rem; background: rgba(0, 0, 0, 0.3); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div id="timer-display" style="font-size: 2rem; font-weight: bold; font-family: 'Courier New', monospace; color: var(--text-primary); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);">
+                            00:00:00.000
+                        </div>
+                        <div id="contribution-indicator" style="display: none; padding: 0.75rem 1.25rem; background: rgba(52, 199, 89, 0.25); border: 2px solid #34C759; border-radius: 8px; color: #34C759; font-size: 0.9rem; text-align: center; margin-bottom: 0.5rem; box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <span style="font-weight: 700; font-size: 1em;">✓ Time logged:</span> 
+                                <span id="contribution-time-display" style="font-family: 'Courier New', monospace; font-weight: 700; font-size: 1.1em;"></span>
+                                <button type="button" id="remove-time-btn" class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-left: 0.5rem;">Remove Time</button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" id="timer-start-btn" class="btn btn-success">Start</button>
+                            <button type="button" id="timer-stop-btn" class="btn btn-secondary" style="display: none;">Stop</button>
+                            <button type="button" id="timer-reset-btn" class="btn btn-secondary">Reset</button>
+                        </div>
+                    </div>
+                    <!-- Editable time input (shown in Modify mode) -->
+                    <div id="editable-time-container" style="display: none; padding: 1rem; background: rgba(52, 199, 89, 0.1); border: 2px solid rgba(52, 199, 89, 0.3); border-radius: 8px;">
+                        <label for="editable-time-input" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--accent-green);">Edit Logged Time:</label>
+                        <input type="text" id="editable-time-input" placeholder="HH:MM:SS" pattern="^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$" style="
+                            width: 100%;
+                            padding: 0.75rem;
+                            font-size: 1.5rem;
+                            font-family: 'Courier New', monospace;
+                            font-weight: 700;
+                            text-align: center;
+                            background: var(--surface-elevated);
+                            border: 2px solid var(--accent-green);
+                            border-radius: 6px;
+                            color: var(--accent-green);
+                            cursor: text;
+                            pointer-events: auto;
+                            z-index: 10;
+                            position: relative;
+                        " title="Enter time in HH:MM:SS format (e.g., 01:30:45)">
+                        <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); text-align: center;">Format: HH:MM:SS (e.g., 01:30:45 for 1 hour, 30 minutes, 45 seconds)</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="quick-add-task-delete-btn" class="btn btn-danger" style="display: none;">Delete Session</button>
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="submit" id="quick-add-task-submit-btn" class="btn btn-primary">Add Session</button>
                 </div>
             </form>
         </div>

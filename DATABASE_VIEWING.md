@@ -1,6 +1,6 @@
 # How to View Your SQLite Database
 
-The database file is located at: `backend/hygiene_tracker.db`
+The database file is located at: `backend/practice_tracker.db`
 
 ## Option 1: Built-in Web Viewer (Easiest) 🌐
 
@@ -19,7 +19,7 @@ This shows all your data in a nice HTML table format - perfect for quick viewing
 2. Install it (free and open-source)
 3. Open DB Browser
 4. Click "Open Database"
-5. Navigate to: `backend/hygiene_tracker.db`
+5. Navigate to: `backend/practice_tracker.db`
 6. Browse tables, run queries, edit data visually
 
 **Features:**
@@ -37,10 +37,10 @@ Open terminal/command prompt in the `backend` directory:
 
 ```bash
 # Windows (if sqlite3 is installed)
-sqlite3 hygiene_tracker.db
+sqlite3 practice_tracker.db
 
 # Or use Python's built-in sqlite3
-python -c "import sqlite3; conn = sqlite3.connect('hygiene_tracker.db'); cursor = conn.cursor(); cursor.execute('SELECT * FROM equipment'); print(cursor.fetchall()); conn.close()"
+python -c "import sqlite3; conn = sqlite3.connect('practice_tracker.db'); cursor = conn.cursor(); cursor.execute('SELECT * FROM equipment'); print(cursor.fetchall()); conn.close()"
 ```
 
 **Useful commands:**
@@ -57,7 +57,7 @@ SELECT * FROM task_occurrences WHERE completed = 0;
 **Best for: Developers already using VS Code**
 
 1. Install "SQLite Viewer" or "SQLite" extension in VS Code
-2. Right-click on `backend/hygiene_tracker.db`
+2. Right-click on `backend/practice_tracker.db`
 3. Select "Open Database"
 4. Browse tables in sidebar
 
@@ -107,10 +107,10 @@ Your database contains these tables:
 Simply copy the file:
 ```bash
 # Windows
-copy backend\hygiene_tracker.db backend\hygiene_tracker_backup.db
+copy backend\practice_tracker.db backend\hygiene_tracker_backup.db
 
 # Mac/Linux
-cp backend/hygiene_tracker.db backend/hygiene_tracker_backup.db
+cp backend/practice_tracker.db backend/hygiene_tracker_backup.db
 ```
 
 That's it! Your database is just a single file - easy to backup and restore.

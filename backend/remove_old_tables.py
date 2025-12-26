@@ -7,7 +7,7 @@ import os
 
 def remove_old_tables():
     """Remove old snake_case tables from the database"""
-    db_path = 'hygiene_tracker.db'
+    db_path = 'practice_tracker.db'
     
     if not os.path.exists(db_path):
         print(f"Database file not found: {db_path}")
@@ -24,12 +24,13 @@ def remove_old_tables():
     for table in tables:
         print(f"  - {table}")
     
-    # Old table names to remove (snake_case)
+    # Old table names to remove (snake_case and old Equipment table)
     old_tables = [
         'user_profile',
         'task_definitions',
         'task_occurrences',
-        'task_completions'
+        'task_completions',
+        'Equipment'  # Old Equipment table (replaced by Instrument)
     ]
     
     print("\nRemoving old snake_case tables...")

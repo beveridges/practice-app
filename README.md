@@ -8,13 +8,13 @@ Ported from Instrument Hygiene Tracker.
 
 ### Core Functionality
 
-1. **Equipment Management**
-   - Add, edit, and delete equipment items (instruments, mouthpieces, cases, etc.)
+1. **Instrument Management**
+   - Add, edit, and delete instrument items (instruments, mouthpieces, cases, etc.)
    - Categorize by type: Woodwind, Brass, Plucked string, Bowed string, Percussion, Storage/Case, Other
-   - Optional notes for each equipment item
+   - Optional notes for each instrument item
 
 2. **Hygiene Task Scheduling**
-   - Define custom hygiene tasks per equipment item
+   - Define custom hygiene tasks per instrument item
    - Task types: Cleaning, Drying, Disinfecting, Other
    - Flexible frequency: Every N days, Weekly, or Monthly
    - Automatic generation of upcoming task occurrences
@@ -27,17 +27,17 @@ Ported from Instrument Hygiene Tracker.
 4. **Task Completion**
    - Mark tasks as complete with optional notes
    - Photo attachments (UI ready, backend supports)
-   - Batch complete all tasks for a single equipment item
+   - Batch complete all tasks for a single instrument item
    - Tracks completion streak (consecutive days with ≥1 completed task)
 
 5. **Analytics Dashboard**
    - Completion rate (weekly/monthly)
    - Completion streak tracking
-   - Equipment maintenance scores (last 30 days)
-   - Task breakdown by type and equipment
+   - Instrument maintenance scores (last 30 days)
+   - Task breakdown by type and instrument
 
 6. **Data Export**
-   - ICS calendar export (filterable by date range, task type, equipment)
+   - ICS calendar export (filterable by date range, task type, instrument)
    - CSV export (task history)
    - JSON export (full backup)
 
@@ -64,7 +64,7 @@ Python Backend (FastAPI)
 
 ### What Python Does
 - ✅ RESTful APIs (JSON)
-- ✅ Equipment CRUD operations
+- ✅ Instrument CRUD operations
 - ✅ Task definition and scheduling logic
 - ✅ Automatic task occurrence generation
 - ✅ Analytics calculations
@@ -167,17 +167,17 @@ conda env remove -n pwa-backend
 
 ## 📱 Using the App
 
-### Adding Equipment
+### Adding Instrument
 
-1. Navigate to the **Equipment** tab
-2. Click **"+ Add Equipment"**
+1. Navigate to the **Instrument** tab
+2. Click **"+ Add Instrument"**
 3. Enter name, select category, add optional notes
 4. Click **Save**
 
 ### Creating Hygiene Tasks
 
-1. Go to **Equipment** tab
-2. Click **"Add Task"** on any equipment item
+1. Go to **Instrument** tab
+2. Click **"Add Task"** on any instrument item
 3. Select task type (Cleaning, Drying, Disinfecting, Other)
 4. Set frequency (e.g., "Every 7 days" or "Weekly")
 5. Set start date
@@ -203,7 +203,7 @@ The app automatically generates upcoming task occurrences based on your schedule
 View your maintenance statistics in the **Analytics** tab:
 - Completion streak
 - Completion rate (weekly/monthly)
-- Maintenance scores per equipment
+- Maintenance scores per instrument
 
 ## 🛠️ Development
 
@@ -230,36 +230,36 @@ View your maintenance statistics in the **Analytics** tab:
 
 ### API Endpoints
 
-#### Equipment
-- `GET /api/equipment` - Get all equipment
-- `GET /api/equipment/{id}` - Get specific equipment
-- `POST /api/equipment` - Create equipment
-- `PUT /api/equipment/{id}` - Update equipment
-- `DELETE /api/equipment/{id}` - Delete equipment
+#### Instrument
+- `GET /api/instrument` - Get all instrument
+- `GET /api/instrument/{id}` - Get specific instrument
+- `POST /api/instrument` - Create instrument
+- `PUT /api/instrument/{id}` - Update instrument
+- `DELETE /api/instrument/{id}` - Delete instrument
 
 #### Task Definitions
 - `GET /api/task-definitions` - Get all task definitions
-- `GET /api/task-definitions/equipment/{id}` - Get definitions for equipment
+- `GET /api/task-definitions/instrument/{id}` - Get definitions for instrument
 - `POST /api/task-definitions` - Create task definition
 - `DELETE /api/task-definitions/{id}` - Delete definition
 
 #### Task Occurrences
-- `GET /api/tasks` - Get tasks (with filters: start_date, end_date, equipment_id, task_type, completed)
+- `GET /api/tasks` - Get tasks (with filters: start_date, end_date, instrument_id, task_type, completed)
 - `GET /api/tasks/date/{date}` - Get tasks for specific date
 - `GET /api/tasks/today` - Get today's tasks
 - `GET /api/tasks/tomorrow` - Get tomorrow's tasks
 - `GET /api/tasks/overdue` - Get overdue tasks
 - `POST /api/tasks/{id}/complete` - Complete a task
-- `POST /api/tasks/equipment/{id}/complete-all` - Batch complete for equipment
+- `POST /api/tasks/instrument/{id}/complete-all` - Batch complete for instrument
 
 #### Analytics
 - `GET /api/analytics/completion-rate?period=weekly|monthly` - Completion rate
 - `GET /api/analytics/streak` - Completion streak
-- `GET /api/analytics/equipment-scores` - Maintenance scores per equipment
+- `GET /api/analytics/instrument-scores` - Maintenance scores per instrument
 - `GET /api/analytics/task-breakdown` - Task breakdown statistics
 
 #### Export
-- `GET /api/export/ics?start_date=&end_date=&equipment_id=&task_type=` - ICS calendar
+- `GET /api/export/ics?start_date=&end_date=&instrument_id=&task_type=` - ICS calendar
 - `GET /api/export/csv` - CSV export
 - `GET /api/export/json` - JSON backup
 
@@ -375,7 +375,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 **Tasks not appearing:**
 - Check that task definitions have valid start dates
-- Verify equipment exists before creating tasks
+- Verify instrument exists before creating tasks
 - Check browser console for API errors
 
 ## 📚 Next Steps
@@ -387,7 +387,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 - [ ] Add data import functionality
 - [ ] Add recurring task editing
 - [ ] Add task templates
-- [ ] Add equipment photos
+- [ ] Add instrument photos
 - [ ] Add search functionality
 - [ ] Add dark mode
 

@@ -9,9 +9,9 @@ The database uses a **hierarchical relationship structure** where each table con
 ```
 UserProfile (Root)
     │
-    ├──→ Equipment (many equipment items per user)
+    ├──→ Instrument (many instrument items per user)
     │       │
-    │       ├──→ TaskDefinition (many task schedules per equipment)
+    │       ├──→ TaskDefinition (many task schedules per instrument)
     │       │       │
     │       │       └──→ TaskOccurrence (many task instances per schedule)
     │       │               │
@@ -24,11 +24,11 @@ UserProfile (Root)
 
 ```mermaid
 erDiagram
-    UserProfile ||--o{ Equipment : "has many"
-    Equipment ||--o{ TaskDefinition : "has many"
+    UserProfile ||--o{ Instrument : "has many"
+    Instrument ||--o{ TaskDefinition : "has many"
     TaskDefinition ||--o{ TaskOccurrence : "generates"
     TaskOccurrence ||--o{ TaskCompletion : "records"
-    Equipment ||--o{ TaskOccurrence : "references (denormalized)"
+    Instrument ||--o{ TaskOccurrence : "references (denormalized)"
     
     UserProfile {
         string id PK "UUID primary key"
@@ -37,7 +37,7 @@ erDiagram
         string name
     }
     
-    Equipment {
+    Instrument {
         string id PK "UUID primary key"
         string user_profile_id FK "→ UserProfile.id"
         string name
@@ -46,7 +46,7 @@ erDiagram
     
     TaskDefinition {
         string id PK "UUID primary key"
-        string equipment_id FK "→ Equipment.id"
+        string instrument_id FK "→ Instrument.id"
         string task_type
         string frequency_type
         integer frequency_value
@@ -56,7 +56,7 @@ erDiagram
     TaskOccurrence {
         string id PK "UUID primary key"
         string task_definition_id FK "→ TaskDefinition.id"
-        string equipment_id FK "→ Equipment.id (denormalized)"
+        string instrument_id FK "→ Instrument.id (denormalized)"
         date due_date "indexed"
         string task_type "denormalized"
         boolean completed
@@ -65,7 +65,7 @@ erDiagram
     TaskCompletion {
         string id PK "UUID primary key"
         string task_occurrence_id FK "→ TaskOccurrence.id"
-        string equipment_id "denormalized (not FK)"
+        string instrument_id "denormalized (not FK)"
         string task_type "denormalized"
         datetime completed_at
     }
@@ -78,7 +78,7 @@ erDiagram
 | Table | Primary Key | Example |
 |-------|-------------|---------|
 | UserProfile | `id` (UUID) | `"550e8400-e29b-41d4-a716-446655440000"` |
-| Equipment | `id` (UUID) | `"abc-123-uuid-here"` |
+| Instrument | `id` (UUID) | `"abc-123-uuid-here"` |
 | TaskDefinition | `id` (UUID) | `"def-456-uuid-here"` |
 | TaskOccurrence | `id` (UUID) | `"ghi-789-uuid-here"` |
 | TaskCompletion | `id` (UUID) | `"jkl-012-uuid-here"` |
@@ -92,42 +92,42 @@ erDiagram
 
 **Foreign keys link tables together using UUID references:**
 
-### 1. Equipment → UserProfile
+### 1. Instrument → UserProfile
 
 ```python
-# Equipment table
+# Instrument table
 user_profile_id = Column(String, ForeignKey("UserProfile.id"), nullable=True)
 ```
 
-**Relationship**: Many Equipment → One UserProfile
-- One user can have many equipment items
-- Equipment belongs to one user (or none if `nullable=True`)
+**Relationship**: Many Instrument → One UserProfile
+- One user can have many instrument items
+- Instrument belongs to one user (or none if `nullable=True`)
 
 **Example**:
 ```
 UserProfile.id = "user-123"
-Equipment 1: { id: "eq-001", user_profile_id: "user-123" }
-Equipment 2: { id: "eq-002", user_profile_id: "user-123" }
-Equipment 3: { id: "eq-003", user_profile_id: "user-123" }
+Instrument 1: { id: "eq-001", user_profile_id: "user-123" }
+Instrument 2: { id: "eq-002", user_profile_id: "user-123" }
+Instrument 3: { id: "eq-003", user_profile_id: "user-123" }
 ```
 
-### 2. TaskDefinition → Equipment
+### 2. TaskDefinition → Instrument
 
 ```python
 # TaskDefinition table
-equipment_id = Column(String, ForeignKey("Equipment.id"), nullable=False)
+instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)
 ```
 
-**Relationship**: Many TaskDefinitions → One Equipment
-- One equipment can have many task schedules
-- TaskDefinition belongs to exactly one equipment
+**Relationship**: Many TaskDefinitions → One Instrument
+- One instrument can have many task schedules
+- TaskDefinition belongs to exactly one instrument
 
 **Example**:
 ```
-Equipment.id = "eq-001"
-TaskDefinition 1: { id: "def-001", equipment_id: "eq-001", task_type: "Cleaning" }
-TaskDefinition 2: { id: "def-002", equipment_id: "eq-001", task_type: "Drying" }
-TaskDefinition 3: { id: "def-003", equipment_id: "eq-001", task_type: "Disinfecting" }
+Instrument.id = "eq-001"
+TaskDefinition 1: { id: "def-001", instrument_id: "eq-001", task_type: "Cleaning" }
+TaskDefinition 2: { id: "def-002", instrument_id: "eq-001", task_type: "Drying" }
+TaskDefinition 3: { id: "def-003", instrument_id: "eq-001", task_type: "Disinfecting" }
 ```
 
 ### 3. TaskOccurrence → TaskDefinition
@@ -149,19 +149,19 @@ TaskOccurrence 2: { id: "occ-002", task_definition_id: "def-001", due_date: "202
 TaskOccurrence 3: { id: "occ-003", task_definition_id: "def-001", due_date: "2025-01-15" }
 ```
 
-### 4. TaskOccurrence → Equipment (Denormalized)
+### 4. TaskOccurrence → Instrument (Denormalized)
 
 ```python
 # TaskOccurrence table
-equipment_id = Column(String, ForeignKey("Equipment.id"), nullable=False)  # Denormalized
+instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)  # Denormalized
 ```
 
-**Relationship**: Many TaskOccurrences → One Equipment (denormalized)
+**Relationship**: Many TaskOccurrences → One Instrument (denormalized)
 - This is a **duplicate** relationship for performance
-- TaskOccurrence already links to Equipment via TaskDefinition, but we also store it directly
+- TaskOccurrence already links to Instrument via TaskDefinition, but we also store it directly
 
 **Why Denormalized?**
-- Faster queries: "Get all tasks for equipment X" doesn't need JOIN
+- Faster queries: "Get all tasks for instrument X" doesn't need JOIN
 - TaskOccurrence can be queried independently
 
 ### 5. TaskCompletion → TaskOccurrence
@@ -188,28 +188,28 @@ When a parent record is deleted, child records are automatically deleted:
 
 ```mermaid
 flowchart TD
-    A[Delete UserProfile] -->|CASCADE| B[Delete All Equipment]
+    A[Delete UserProfile] -->|CASCADE| B[Delete All Instrument]
     B -->|CASCADE| C[Delete All TaskDefinitions]
     C -->|CASCADE| D[Delete All TaskOccurrences]
     D -.->|Indirect| E[TaskCompletions remain orphaned]
     
-    F[Delete Equipment] -->|CASCADE| C
+    F[Delete Instrument] -->|CASCADE| C
     G[Delete TaskDefinition] -->|CASCADE| D
 ```
 
 **Cascade Rules** (from SQLAlchemy):
 
-1. **UserProfile → Equipment**
+1. **UserProfile → Instrument**
    ```python
-   equipment = relationship("Equipment", cascade="all, delete-orphan")
+   instrument = relationship("Instrument", cascade="all, delete-orphan")
    ```
-   - Delete UserProfile → All Equipment deleted
+   - Delete UserProfile → All Instrument deleted
 
-2. **Equipment → TaskDefinition**
+2. **Instrument → TaskDefinition**
    ```python
    task_definitions = relationship("TaskDefinition", cascade="all, delete-orphan")
    ```
-   - Delete Equipment → All TaskDefinitions deleted
+   - Delete Instrument → All TaskDefinitions deleted
 
 3. **TaskDefinition → TaskOccurrence**
    ```python
@@ -227,8 +227,8 @@ flowchart TD
 # 1. User exists
 user = UserProfile(id="user-123", name="John")
 
-# 2. User adds equipment
-equipment = Equipment(
+# 2. User adds instrument
+instrument = Instrument(
     id="eq-001",
     user_profile_id="user-123",  # FK → UserProfile
     name="Saxophone",
@@ -238,7 +238,7 @@ equipment = Equipment(
 # 3. User creates task definition (schedule)
 task_def = TaskDefinition(
     id="def-001",
-    equipment_id="eq-001",  # FK → Equipment
+    instrument_id="eq-001",  # FK → Instrument
     task_type="Cleaning",
     frequency_type="days",
     frequency_value=7,
@@ -249,7 +249,7 @@ task_def = TaskDefinition(
 occurrence1 = TaskOccurrence(
     id="occ-001",
     task_definition_id="def-001",  # FK → TaskDefinition
-    equipment_id="eq-001",          # FK → Equipment (denormalized)
+    instrument_id="eq-001",          # FK → Instrument (denormalized)
     due_date="2025-01-01",
     task_type="Cleaning"            # Denormalized
 )
@@ -257,7 +257,7 @@ occurrence1 = TaskOccurrence(
 occurrence2 = TaskOccurrence(
     id="occ-002",
     task_definition_id="def-001",  # FK → TaskDefinition
-    equipment_id="eq-001",          # FK → Equipment (denormalized)
+    instrument_id="eq-001",          # FK → Instrument (denormalized)
     due_date="2025-01-08",
     task_type="Cleaning"            # Denormalized
 )
@@ -266,7 +266,7 @@ occurrence2 = TaskOccurrence(
 completion = TaskCompletion(
     id="comp-001",
     task_occurrence_id="occ-001",  # FK → TaskOccurrence
-    equipment_id="eq-001",          # Denormalized (not FK)
+    instrument_id="eq-001",          # Denormalized (not FK)
     task_type="Cleaning",           # Denormalized
     completed_at="2025-01-01 10:00"
 )
@@ -274,17 +274,17 @@ completion = TaskCompletion(
 
 ## Querying with Relationships
 
-### Get all equipment for a user:
+### Get all instrument for a user:
 ```python
-equipment = db.query(Equipment).filter(
-    Equipment.user_profile_id == user_id
+instrument = db.query(Instrument).filter(
+    Instrument.user_profile_id == user_id
 ).all()
 ```
 
-### Get all task definitions for equipment:
+### Get all task definitions for instrument:
 ```python
 task_defs = db.query(TaskDefinition).filter(
-    TaskDefinition.equipment_id == equipment_id
+    TaskDefinition.instrument_id == instrument_id
 ).all()
 ```
 
@@ -295,24 +295,24 @@ occurrences = db.query(TaskOccurrence).filter(
 ).all()
 ```
 
-### Join query (equipment with its task definitions):
+### Join query (instrument with its task definitions):
 ```python
 from sqlalchemy.orm import joinedload
 
-equipment = db.query(Equipment).options(
-    joinedload(Equipment.task_definitions)
+instrument = db.query(Instrument).options(
+    joinedload(Instrument.task_definitions)
 ).filter(
-    Equipment.id == equipment_id
+    Instrument.id == instrument_id
 ).first()
 
-# Now access: equipment.task_definitions (list of TaskDefinition objects)
+# Now access: instrument.task_definitions (list of TaskDefinition objects)
 ```
 
-### Get all tasks for equipment (using denormalized FK):
+### Get all tasks for instrument (using denormalized FK):
 ```python
-# Fast query - uses denormalized equipment_id (no JOIN needed)
+# Fast query - uses denormalized instrument_id (no JOIN needed)
 tasks = db.query(TaskOccurrence).filter(
-    TaskOccurrence.equipment_id == equipment_id,
+    TaskOccurrence.instrument_id == instrument_id,
     TaskOccurrence.completed == False
 ).all()
 ```
@@ -321,10 +321,10 @@ tasks = db.query(TaskOccurrence).filter(
 
 | Relationship | Parent → Child | Foreign Key Column | Type | Cascade Delete |
 |--------------|----------------|-------------------|------|----------------|
-| UserProfile → Equipment | 1:many | `Equipment.user_profile_id` | FK | ✅ Yes |
-| Equipment → TaskDefinition | 1:many | `TaskDefinition.equipment_id` | FK | ✅ Yes |
+| UserProfile → Instrument | 1:many | `Instrument.user_profile_id` | FK | ✅ Yes |
+| Instrument → TaskDefinition | 1:many | `TaskDefinition.instrument_id` | FK | ✅ Yes |
 | TaskDefinition → TaskOccurrence | 1:many | `TaskOccurrence.task_definition_id` | FK | ✅ Yes |
-| Equipment → TaskOccurrence | 1:many | `TaskOccurrence.equipment_id` | FK (denormalized) | ❌ No (via TaskDefinition) |
+| Instrument → TaskOccurrence | 1:many | `TaskOccurrence.instrument_id` | FK (denormalized) | ❌ No (via TaskDefinition) |
 | TaskOccurrence → TaskCompletion | 1:many | `TaskCompletion.task_occurrence_id` | FK | ❌ No (preserve history) |
 
 ## Key Points
@@ -332,6 +332,6 @@ tasks = db.query(TaskOccurrence).filter(
 1. **All primary keys are UUIDs** - Enable offline sync
 2. **Foreign keys reference parent UUIDs** - Maintain relationships
 3. **Cascade deletes** - Maintain data consistency automatically
-4. **Denormalization** - Performance optimization (equipment_id, task_type in TaskOccurrence)
+4. **Denormalization** - Performance optimization (instrument_id, task_type in TaskOccurrence)
 5. **History preservation** - TaskCompletion doesn't cascade (audit trail)
 

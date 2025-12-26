@@ -47,7 +47,7 @@
 ## Important Notes
 
 ### Database Files
-- The `hygiene_tracker.db` file is **NOT** tracked (in `.gitignore`)
+- The `practice_tracker.db` file is **NOT** tracked (in `.gitignore`)
 - Each developer should create their own database
 - Database schema is defined in `database.py` which IS tracked
 

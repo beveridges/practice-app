@@ -11,7 +11,7 @@ import os
 from uuid_utils import generate_uuid
 
 # Database file location
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./hygiene_tracker.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./practice_tracker.db")
 
 # Create engine with SQLite optimizations for better concurrency
 if "sqlite" in DATABASE_URL:
@@ -47,7 +47,7 @@ Base = declarative_base()
 class UserProfile(Base):
     """
     Main entry point - User profile containing personal information and settings.
-    All equipment belongs to a user profile.
+    All instruments belong to a user profile.
     """
     __tablename__ = "UserProfile"
     
@@ -71,18 +71,18 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    equipment = relationship("Equipment", back_populates="user_profile", cascade="all, delete-orphan")
+    instruments = relationship("Instrument", back_populates="user_profile", cascade="all, delete-orphan")
 
 
-class Equipment(Base):
+class Instrument(Base):
     """
-    Equipment/instruments owned by a user.
+    Instruments owned by a user.
     Linked to UserProfile as the main entry point.
     """
-    __tablename__ = "Equipment"
+    __tablename__ = "Instrument"
     
     id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
-    user_profile_id = Column(String, ForeignKey("UserProfile.id"), nullable=False)  # UUID foreign key (required)
+    user_profile_id = Column(String, ForeignKey("UserProfile.id"), nullable=True)  # UUID foreign key (optional for private app)
     name = Column(String, nullable=False)
     category = Column(String, nullable=False)  # EquipmentCategory enum as string
     instrument_type = Column(String, nullable=False, default="Primary")  # "Primary" or "Secondary"
@@ -91,39 +91,40 @@ class Equipment(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    user_profile = relationship("UserProfile", back_populates="equipment")
-    task_definitions = relationship("TaskDefinition", back_populates="equipment", cascade="all, delete-orphan")
-    task_occurrences = relationship("TaskOccurrence", back_populates="equipment")
+    user_profile = relationship("UserProfile", back_populates="instruments")
+    task_definitions = relationship("TaskDefinition", back_populates="instrument", cascade="all, delete-orphan")
+    task_occurrences = relationship("TaskOccurrence", back_populates="instrument")
+    practice_sessions = relationship("PracticeSession", back_populates="instrument")
 
 
 class TaskDefinition(Base):
     """
-    Cleaning schedule template - defines recurring tasks for equipment.
+    Practice session template - defines practice sessions for instruments (Trumpet only).
     """
     __tablename__ = "TaskDefinitions"
     
     id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
-    equipment_id = Column(String, ForeignKey("Equipment.id"), nullable=False)  # UUID foreign key
-    task_type = Column(String, nullable=False)  # TaskType enum: Cleaning, Drying, Disinfecting, Other
+    instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)  # UUID foreign key
+    task_type = Column(String, nullable=False, default="Practice")  # TaskType enum: Practice only
     frequency_type = Column(String, nullable=False)  # FrequencyType enum: days, weekly, monthly
     frequency_value = Column(Integer, nullable=False)  # N days, or 1 for weekly/monthly
     start_date = Column(Date, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    equipment = relationship("Equipment", back_populates="task_definitions")
+    instrument = relationship("Instrument", back_populates="task_definitions")
     task_occurrences = relationship("TaskOccurrence", back_populates="task_definition", cascade="all, delete-orphan")
 
 
 class TaskOccurrence(Base):
     """
-    Generated task instances - individual occurrences created from task definitions.
+    Practice session instances - individual practice sessions created from task definitions.
     """
     __tablename__ = "TaskOccurrences"
     
     id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
     task_definition_id = Column(String, ForeignKey("TaskDefinitions.id"), nullable=False)  # UUID foreign key
-    equipment_id = Column(String, ForeignKey("Equipment.id"), nullable=False)  # UUID foreign key (denormalized)
+    instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)  # UUID foreign key (denormalized)
     due_date = Column(Date, nullable=False, index=True)
     task_type = Column(String, nullable=False)
     completed = Column(Boolean, default=False)
@@ -133,7 +134,7 @@ class TaskOccurrence(Base):
     
     # Relationships
     task_definition = relationship("TaskDefinition", back_populates="task_occurrences")
-    equipment = relationship("Equipment", back_populates="task_occurrences")
+    instrument = relationship("Instrument", back_populates="task_occurrences")
 
 
 class TaskCompletion(Base):
@@ -144,11 +145,52 @@ class TaskCompletion(Base):
     
     id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
     task_occurrence_id = Column(String, ForeignKey("TaskOccurrences.id"), nullable=False)  # UUID foreign key
-    equipment_id = Column(String, nullable=False)  # UUID denormalized for easier queries
+    instrument_id = Column(String, nullable=False)  # UUID denormalized for easier queries
     task_type = Column(String, nullable=False)
     completed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     notes = Column(String, nullable=True)
     photo_url = Column(String, nullable=True)
+
+
+class PracticeSessionDefinition(Base):
+    """
+    Practice session type definitions (e.g., "Practice General").
+    """
+    __tablename__ = "PracticeSessionDefinition"
+    
+    id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
+    name = Column(String, nullable=False, unique=True)  # e.g., "Practice General"
+    description = Column(Text, nullable=True)  # Optional description
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    practice_sessions = relationship("PracticeSession", back_populates="practice_session_definition", cascade="all, delete-orphan")
+
+
+class PracticeSession(Base):
+    """
+    Individual practice sessions - tracks actual practice time with start/end times and duration.
+    """
+    __tablename__ = "PracticeSession"
+    
+    id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
+    instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)  # UUID foreign key
+    practice_session_definition_id = Column(String, ForeignKey("PracticeSessionDefinition.id"), nullable=False)  # UUID foreign key
+    due_date = Column(Date, nullable=False, index=True)  # Session date
+    start_time = Column(DateTime, nullable=True)  # When practice started
+    end_time = Column(DateTime, nullable=True)  # When practice ended
+    duration = Column(Integer, nullable=True)  # Duration in milliseconds
+    completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    photo_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    instrument = relationship("Instrument", back_populates="practice_sessions")
+    practice_session_definition = relationship("PracticeSessionDefinition", back_populates="practice_sessions")
 
 
 def init_db():
