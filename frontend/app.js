@@ -54,9 +54,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModals();
     setTodayDate();
     
-    // Add click handler to status indicator for manual connection test
+    // Add click handler to status indicator for manual connection test (only if clicking the ring, not the profile button)
     if (statusIndicator) {
-        statusIndicator.addEventListener('click', () => {
+        statusIndicator.addEventListener('click', (e) => {
+            // Don't trigger if clicking the profile button
+            if (e.target.closest('.header-profile-btn')) {
+                return;
+            }
             console.log('Status icon clicked - checking connection...');
             console.log('Current statusIcon:', statusIcon);
             console.log('Current statusIcon src:', statusIcon ? statusIcon.src : 'N/A');
@@ -145,6 +149,14 @@ function setupEventListeners() {
             switchView(view);
         });
     });
+    
+    // Header profile button
+    const headerProfileBtn = document.querySelector('.header-profile-btn');
+    if (headerProfileBtn) {
+        headerProfileBtn.addEventListener('click', () => {
+            switchView('profile');
+        });
+    }
 
     // Online/Offline events
     window.addEventListener('online', handleOnline);
