@@ -102,10 +102,6 @@ body {
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
     flex: 1;
     max-width: 100%;
 }
@@ -116,8 +112,8 @@ body {
 
 .total-time-value {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-weight: 700;
-    font-size: 2.5rem;
+    font-weight: normal;
+    font-size: 3.5rem;
     letter-spacing: 2px;
     text-align: center;
     flex: 0 0 auto;
@@ -231,44 +227,40 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 72px;
-    height: 72px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     padding: 0;
     margin: 0;
     transition: all 0.3s ease;
     cursor: pointer;
     background: transparent;
-    border: 3px solid transparent;
+    border: none;
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
 }
 
 .status-icon {
-    width: 64px;
-    height: 64px;
-    object-fit: contain;
-    filter: grayscale(100%) brightness(0.4);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
     transition: all 0.3s ease;
-}
-
-.status-indicator.connected {
-    /* Green background and ring around fall-out boy when connected */
-    border: 3px solid #34C759;
-    box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
-    background: rgba(52, 199, 89, 0.3);
+    background: transparent;
+    border: 3px solid #666;
 }
 
 .status-indicator.connected .status-icon {
-    /* Keep normal image, no filter changes */
-    filter: none;
+    border-color: #34C759;
+    box-shadow: 0 0 4px rgba(52, 199, 89, 0.6);
 }
 
 .status-indicator.disconnected .status-icon {
-    filter: grayscale(100%) brightness(0.3);
-    /* Gray/dim when disconnected */
+    border-color: #666;
 }
 
 .status-indicator.connecting .status-icon {
-    filter: grayscale(100%) brightness(0.7);
+    border-color: #FFC107;
     animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -386,7 +378,20 @@ body {
 
 .calendar-day.today {
     background: rgba(0, 122, 255, 0.2);
-    border-color: var(--accent-blue);
+    border: 2px solid #5AC8FA;
+    font-weight: 600;
+}
+
+.calendar-day.selected {
+    border: 2px solid #FF9500;
+    box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+    font-weight: 600;
+}
+
+.calendar-day.today.selected {
+    border: 2px solid #FF9500;
+    box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+    background: rgba(0, 122, 255, 0.1);
     font-weight: 600;
 }
 
@@ -805,15 +810,21 @@ body {
 }
 
 .week-day-header.today {
-    background: rgba(0, 122, 255, 0.2);
+    background: rgba(0, 122, 255, 0.1);
+    border-bottom: 3px solid #5AC8FA;
     font-weight: 600;
 }
 
 .week-day-header.selected {
-    background: #FF6B35;
-    color: white;
-    box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.3);
+    border-bottom: 3px solid #FF9500;
+    box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
     font-weight: 600;
+}
+
+.week-day-header.today.selected {
+    border-bottom: 3px solid #FF9500;
+    box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+    background: rgba(0, 122, 255, 0.1);
 }
 
 .week-day-name {
@@ -1656,6 +1667,12 @@ textarea {
     color: var(--text-primary);
 }
 
+input[type="datetime-local"][readonly] {
+    background: var(--surface);
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
@@ -1828,12 +1845,17 @@ label {
     display: flex;
     background: var(--surface-elevated);
     border-top: 1px solid var(--border-color);
-    position: sticky;
+    position: fixed;
     bottom: 0;
+    left: 0;
+    right: 0;
     z-index: 100;
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
     padding: 0.5rem 0;
     width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    box-sizing: border-box;
 }
 
 .bottom-nav-btn {

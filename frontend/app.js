@@ -208,14 +208,6 @@ function setupEventListeners() {
         removeTimeBtn.addEventListener('click', handleRemoveTimeFromSession);
     }
     
-    // History button
-    const historyBtn = document.getElementById('history-total-time-btn');
-    if (historyBtn) {
-        historyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openContributionHistory();
-        });
-    }
     
     // Reset total time button - show on double-click
     const totalTimeContainer = document.getElementById('total-practice-time');
@@ -385,34 +377,20 @@ function updateStatus(status, message) {
     }
     
     console.log('updateStatus called:', status, message);
-    console.log('Current icon src before update:', statusIcon.src);
     
     // Remove all status classes first
     statusIndicator.className = 'status-indicator';
     // Add the new status class
     statusIndicator.classList.add(status);
     
-    // Always use the normal fall-out boy image
-    const basePath = '/img/icons/';
-    const newSrc = basePath + 'fall-out_boy_normal.png';
-    statusIcon.src = newSrc;
-    
-    // Update alt text and title based on status
+    // Update title based on status
     if (status === 'connected') {
-        statusIcon.alt = 'Database Connected';
-        statusIcon.title = message || 'Database Connected';
+        statusIndicator.title = message || 'Database Connected';
     } else {
-        statusIcon.alt = 'Database Disconnected';
-        statusIcon.title = message || 'Connection Status';
+        statusIndicator.title = message || 'Connection Status';
     }
     
-    // Force image reload
-    statusIcon.onerror = function() {
-        console.error('Failed to load icon image:', statusIcon.src);
-    };
-    
-    console.log('Status updated - new icon src:', statusIcon.src);
-    console.log('Status indicator classes:', statusIndicator.className);
+    console.log('Status updated - status indicator classes:', statusIndicator.className);
 }
 
 // View Management
@@ -454,10 +432,9 @@ function switchView(viewName) {
             renderCurrentCalendarView();
         }
     } else if (viewName === 'tasks') {
-        // Ensure tasks are loaded from database first
+        // Ensure tasks are loaded from database first, then render Contribution History
         loadTasks().then(() => {
-            // Then load filtered view
-            loadTasksForFilter('today');
+            renderContributionHistory();
         });
     } else if (viewName === 'instruments') {
         // Ensure instruments are loaded before rendering
@@ -1371,7 +1348,7 @@ function renderDayView(date) {
             html += `
                 <div class="hour-row ${isCurrentHour ? 'current-hour' : ''}" data-hour="${hour}">
                     <div class="hour-label">${formatHour(hour)}</div>
-                    <div class="hour-content" onclick="createTaskFromCalendar('${selectedDate}', ${hour})">
+                    <div class="hour-content" onclick="createTaskFromCalendar(null, ${hour})">
                         <div class="current-time-indicator" style="display: ${isCurrentHour && now.getMinutes() > 0 ? 'block' : 'none'}; top: ${(now.getMinutes() / 60) * 100}%;"></div>
                     </div>
                 </div>
@@ -1417,7 +1394,8 @@ function renderWeekView(startDate) {
         
         html += `
             <div class="week-day-header ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" 
-                 onclick="selectDate('${dateStr}')">
+                 onclick="selectDate('${dateStr}')"
+                 ondblclick="handleCalendarDayDoubleClick('${dateStr}', ${isToday})">
                 <div class="week-day-name">${dayName}</div>
                 <div class="week-day-number">${dayNum}</div>
             </div>
@@ -1442,7 +1420,7 @@ function renderWeekView(startDate) {
             
             html += `
                 <div class="week-day-cell" data-date="${dateStr}" data-hour="${hour}" 
-                     onclick="createTaskFromCalendar('${dateStr}', ${hour})">
+                     onclick="createTaskFromCalendar(null, ${hour})">
                     ${hourTasks.length > 0 ? hourTasks.map(t => renderTaskMiniCard(t)).join('') : ''}
                 </div>
             `;
@@ -1564,6 +1542,7 @@ function renderMonthView() {
         grid.innerHTML += `
             <div class="calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" 
                  data-date="${dateStr}" onclick="selectDate('${dateStr}')" 
+                 ondblclick="handleCalendarDayDoubleClick('${dateStr}', ${isToday})"
                  draggable="false" ondrop="handleTaskDrop(event)" ondragover="event.preventDefault()">
                 <div class="calendar-day-number">${day}</div>
                 <div class="calendar-day-tasks">${taskDisplay}</div>
@@ -1587,8 +1566,18 @@ function selectDate(dateStr) {
         renderCurrentCalendarView();
     }
     showTasksForDate(dateStr);
-    // Open the "Add Session" dialog with the selected date pre-filled
-    createTaskFromCalendar(dateStr);
+    // Do not open Add Session dialog - sessions can only be added for today
+    // Users must use the "+ Add Session" button which will use today's date
+}
+
+function handleCalendarDayDoubleClick(dateStr, isToday) {
+    // Only allow adding session if it's today's date
+    if (isToday) {
+        createTaskFromCalendar(null);
+    } else {
+        // Show message that sessions can only be added for today
+        alert('Practice sessions can only be created for today\'s date. Please double-click on today\'s date or use the "+ Add Session" button.');
+    }
 }
 
 function selectDateAndShowTasks(dateStr) {
@@ -1702,33 +1691,54 @@ async function createTaskFromCalendar(date, hour) {
     const modal = document.getElementById('quick-add-task-modal');
     const dateInput = document.getElementById('quick-task-date');
     
-    // Always default to current date and time with full precision including milliseconds
+    // ALWAYS use today's date only - ignore any date parameter
     const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
     // Format for datetime-local with step="0.001" supports milliseconds: YYYY-MM-DDTHH:mm:ss.sss
-    // But browser support varies, so we'll format it manually
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
     
-    // Format: YYYY-MM-DDTHH:mm:ss.sss
-    const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
-    
-    if (date && hour !== undefined) {
-        // If date and hour provided (from calendar click), use those with current time/seconds/ms
-        const dateTimeString = `${date}T${String(hour).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${milliseconds}`;
-        dateInput.value = dateTimeString;
-    } else if (date) {
-        // If only date provided, use date with current time including seconds and milliseconds
-        const dateTimeString = `${date}T${hours}:${minutes}:${seconds}.${milliseconds}`;
-        dateInput.value = dateTimeString;
+    // Use current time if hour provided, otherwise use current time
+    let hours, minutes, seconds, milliseconds;
+    if (hour !== undefined) {
+        // If hour provided from calendar, use that hour with current minutes/seconds/ms
+        hours = String(hour).padStart(2, '0');
+        minutes = String(now.getMinutes()).padStart(2, '0');
+        seconds = String(now.getSeconds()).padStart(2, '0');
+        milliseconds = String(now.getMilliseconds()).padStart(3, '0');
     } else {
-        // Use current date and time with full precision (includes seconds and milliseconds)
-        dateInput.value = currentDateTime;
+        // Use current time
+        hours = String(now.getHours()).padStart(2, '0');
+        minutes = String(now.getMinutes()).padStart(2, '0');
+        seconds = String(now.getSeconds()).padStart(2, '0');
+        milliseconds = String(now.getMilliseconds()).padStart(3, '0');
     }
+    
+    // Format: YYYY-MM-DDTHH:mm:ss.sss (always today's date)
+    const todayDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+    dateInput.value = todayDateTime;
+    
+    // Set min and max to today only (prevents selecting other dates)
+    const todayStr = `${year}-${month}-${day}`;
+    dateInput.setAttribute('min', `${todayStr}T00:00:00.000`);
+    dateInput.setAttribute('max', `${todayStr}T23:59:59.999`);
+    
+    // Add event listener to prevent date changes
+    dateInput.addEventListener('change', function() {
+        const selectedDate = this.value.split('T')[0];
+        if (selectedDate !== todayStr) {
+            alert('Practice sessions can only be created for today\'s date.');
+            // Reset to today with current time
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+            this.value = `${todayStr}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+        }
+    });
     
     // ALWAYS ensure instruments are loaded and dropdown is populated
     // Populate instruments dropdown - will default to primary instrument (Trumpet)
@@ -1909,8 +1919,7 @@ async function deleteSession(taskId) {
                     showTasksForDate(selectedDate);
                 }
             } else if (currentView === 'tasks') {
-                const activeTab = document.querySelector('.task-tab.active');
-                loadTasksForFilter(activeTab.dataset.filter);
+                renderContributionHistory();
             }
             alert('Session deleted successfully!');
         } else {
@@ -2279,9 +2288,16 @@ async function openContributionHistory() {
 }
 
 function renderContributionHistory() {
+    // Support both modal and tasks view
     const loadingDiv = document.getElementById('contribution-history-loading');
     const listDiv = document.getElementById('contribution-history-list');
     const emptyDiv = document.getElementById('contribution-history-empty');
+    
+    // If elements don't exist in modal, they might be in tasks view (they have the same IDs)
+    if (!loadingDiv || !listDiv || !emptyDiv) {
+        console.warn('Contribution History elements not found');
+        return;
+    }
     
     // Get all contributions from database (sessions with duration > 0)
     const contributions = tasks
@@ -2401,8 +2417,8 @@ function renderContributionHistory() {
                             <span style="font-weight: 600; color: var(--text-primary);">${escapeHtml(instrumentName)}</span>
                             ${isCompleted ? '<span style="color: var(--accent-green); font-size: 0.85rem;">(Completed)</span>' : ''}
                         </div>
-                        <div style="font-size: 0.8rem; color: var(--text-tertiary); font-family: monospace;">
-                            Session ID: ${sessionId.substring(0, 8)}...
+                        <div style="font-size: 0.8rem; color: var(--text-tertiary); font-family: monospace; word-break: break-all;">
+                            Session ID: ${sessionId}
                         </div>
                     </div>
                     <div style="text-align: right;">
@@ -2665,6 +2681,24 @@ async function handleQuickAddTask(e) {
     // Extract date for backend (YYYY-MM-DD format)
     const date = dateTimeValue.split('T')[0];
     
+    // Validate that the date is today
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (date !== todayStr) {
+        alert('Practice sessions can only be created for today\'s date. Please use today\'s date.');
+        // Reset to today
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+        document.getElementById('quick-task-date').value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+        return;
+    }
+    
     // Store full precision datetime in console for reference
     console.log('Full precision datetime:', fullDateTime);
     
@@ -2777,9 +2811,13 @@ async function handleQuickAddTask(e) {
                 
                 await loadTasks();
                 closeModal('quick-add-task-modal');
-                renderCurrentCalendarView();
-                if (selectedDate) {
-                    showTasksForDate(selectedDate);
+                if (currentView === 'calendar') {
+                    renderCurrentCalendarView();
+                    if (selectedDate) {
+                        showTasksForDate(selectedDate);
+                    }
+                } else if (currentView === 'tasks') {
+                    renderContributionHistory();
                 }
                 alert('Session updated successfully!');
             } else {
@@ -2849,7 +2887,11 @@ async function handleQuickAddTask(e) {
                 }
                 
                 closeModal('quick-add-task-modal');
-                renderCurrentCalendarView();
+                if (currentView === 'calendar') {
+                    renderCurrentCalendarView();
+                } else if (currentView === 'tasks') {
+                    renderContributionHistory();
+                }
                 alert('Session added successfully!');
             } else {
                 const errorText = await response.text();
@@ -4233,6 +4275,7 @@ window.updateProfile = updateProfile;
 window.simulateProfileData = simulateProfileData;
 window.switchCalendarView = switchCalendarView;
 window.createTaskFromCalendar = createTaskFromCalendar;
+window.handleCalendarDayDoubleClick = handleCalendarDayDoubleClick;
 window.openModifySessionModal = openModifySessionModal;
 window.startTimer = startTimer;
 window.stopTimer = stopTimer;

@@ -21,25 +21,22 @@
         <header class="app-header">
             <div id="total-practice-time" class="total-practice-time" style="display: flex; align-items: center; justify-content: center; gap: 1rem; cursor: pointer; flex: 1;" title="Double-click to show reset option">
                 <span id="total-time-display" class="total-time-value">00:00:00</span>
-                <button id="history-total-time-btn" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2;" title="View contribution history">
-                    <img src="/img/icons/history.png" alt="History" style="width: 16px; height: 16px; filter: brightness(0) invert(1);">
-                </button>
                 <button id="reset-total-time-btn" class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2; display: none;" title="Reset total practice time to zero">Reset</button>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button id="install-btn" class="install-btn" style="display: none;">
                     Install App
                 </button>
-                <div id="status" class="status-indicator" title="Connection Status">
-                    <img id="status-icon" src="/img/icons/fall-out_boy_normal.png" alt="Status" class="status-icon">
-                </div>
+            </div>
+            <div id="status" class="status-indicator" title="Connection Status">
+                <div id="status-icon" class="status-icon"></div>
             </div>
         </header>
 
         <!-- Navigation Tabs -->
         <nav class="app-nav">
             <button class="nav-btn" data-view="instruments">Instrument</button>
-            <button class="nav-btn" data-view="tasks">Session</button>
+            <button class="nav-btn" data-view="tasks">History</button>
             <button class="nav-btn active" data-view="calendar">Calendar</button>
             <button class="nav-btn" data-view="stats">Stats</button>
         </nav>
@@ -131,15 +128,23 @@
                 <div id="selected-date-tasks" class="selected-date-tasks"></div>
             </div>
 
-            <!-- Tasks View -->
+            <!-- Tasks View (History) -->
             <div id="tasks-view" class="view">
                 <div class="tasks-view-container">
-                    <div class="task-tabs">
-                        <button class="task-tab active" data-filter="today">Today</button>
-                        <button class="task-tab" data-filter="tomorrow">Tomorrow</button>
-                        <button class="task-tab" data-filter="overdue">Overdue</button>
+                    <h2 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <img src="/img/icons/history.png" alt="History" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
+                        Contribution History
+                    </h2>
+                    <div id="contribution-history-content">
+                        <div id="contribution-history-loading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            Loading history...
+                        </div>
+                        <div id="contribution-history-list" style="display: none;"></div>
+                        <div id="contribution-history-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No contributions yet</p>
+                            <p style="font-size: 0.9rem;">Start a practice session timer to log time!</p>
+                        </div>
                     </div>
-                    <div id="tasks-list" class="tasks-list"></div>
                 </div>
             </div>
 
@@ -352,8 +357,8 @@
             <button class="bottom-nav-btn active" data-view="calendar" title="Calendar">
                 <img src="/img/icons/Calendar.png" alt="Calendar" class="bottom-nav-icon" />
             </button>
-            <button class="bottom-nav-btn" data-view="tasks" title="Session">
-                <img src="/img/icons/Tasks.png" alt="Session" class="bottom-nav-icon" />
+            <button class="bottom-nav-btn" data-view="tasks" title="History">
+                <img src="/img/icons/Tasks.png" alt="History" class="bottom-nav-icon" />
             </button>
             <button class="bottom-nav-btn" data-view="stats" title="Stats">
                 <img src="/img/icons/Progress.png" alt="Stats" class="bottom-nav-icon" />
