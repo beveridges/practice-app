@@ -982,15 +982,16 @@ async def reschedule_task(task_id: str, new_date: dict, db: Session = Depends(ge
 
 @app.delete("/api/tasks/{task_id}")
 async def delete_task_occurrence(task_id: str, db: Session = Depends(get_db)):
-    """Delete a single task occurrence (practice session)"""
-    task = db.query(DBTaskOccurrence).filter(DBTaskOccurrence.id == task_id).first()
-    if not task:
+    """Delete a single practice session (legacy endpoint - deletes from PracticeSession table)"""
+    # Query PracticeSession instead of TaskOccurrence (matching GET /api/tasks behavior)
+    session = db.query(DBPracticeSession).filter(DBPracticeSession.id == task_id).first()
+    if not session:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    db.delete(task)
+    db.delete(session)
     db.commit()
     
-    return {"message": "Task occurrence deleted", "id": task_id}
+    return {"message": "Practice session deleted", "id": task_id}
 
 @app.post("/api/tasks/instrument/{instrument_id}/complete-all")
 async def complete_all_tasks_for_instrument(instrument_id: str, db: Session = Depends(get_db)):

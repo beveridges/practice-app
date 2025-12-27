@@ -1768,10 +1768,33 @@ async function createTaskFromCalendar(date, hour) {
 }
 
 async function openModifySessionModal(taskId) {
-    const task = tasks.find(t => t.id === taskId);
+    // Fetch fresh task data from database to ensure we have latest
+    let task = tasks.find(t => t.id === taskId);
+    
+    // If not found in cache, try fetching directly from API
     if (!task) {
-        console.error('Task not found:', taskId);
-        return;
+        console.log('Task not in cache, fetching from database...');
+        try {
+            const response = await fetch(`${API_BASE_URL}/practice-sessions/${taskId}`);
+            if (response.ok) {
+                task = await response.json();
+                // Update cache
+                const index = tasks.findIndex(t => t.id === taskId);
+                if (index >= 0) {
+                    tasks[index] = task;
+                } else {
+                    tasks.push(task);
+                }
+            } else {
+                console.error('Task not found in database:', taskId);
+                alert('Session not found in database');
+                return;
+            }
+        } catch (error) {
+            console.error('Error fetching session:', error);
+            alert('Failed to load session from database');
+            return;
+        }
     }
     
     const modal = document.getElementById('quick-add-task-modal');
@@ -1787,16 +1810,46 @@ async function openModifySessionModal(taskId) {
     
     // Set form values from task
     if (task.due_date) {
-        // Convert task due_date to datetime-local format
-        const taskDate = new Date(task.due_date);
-        const year = taskDate.getFullYear();
-        const month = String(taskDate.getMonth() + 1).padStart(2, '0');
-        const day = String(taskDate.getDate()).padStart(2, '0');
-        const hours = String(taskDate.getHours()).padStart(2, '0');
-        const minutes = String(taskDate.getMinutes()).padStart(2, '0');
-        const seconds = String(taskDate.getSeconds()).padStart(2, '0');
-        const milliseconds = String(taskDate.getMilliseconds()).padStart(3, '0');
-        dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+        // Parse due_date - it might be a date-only string (YYYY-MM-DD) or include time
+        let dateStr = task.due_date;
+        
+        // If it's a date-only string (YYYY-MM-DD), parse it directly to avoid timezone issues
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            // Date only - use it directly and add current time
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+            dateInput.value = `${dateStr}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+        } else {
+            // Has time component - parse it carefully
+            const taskDate = new Date(dateStr);
+            // Check if date is valid
+            if (isNaN(taskDate.getTime())) {
+                console.error('Invalid date:', dateStr);
+                // Fallback to current date/time
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+                dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+            } else {
+                // Use local time components to avoid timezone issues
+                const year = taskDate.getFullYear();
+                const month = String(taskDate.getMonth() + 1).padStart(2, '0');
+                const day = String(taskDate.getDate()).padStart(2, '0');
+                const hours = String(taskDate.getHours()).padStart(2, '0');
+                const minutes = String(taskDate.getMinutes()).padStart(2, '0');
+                const seconds = String(taskDate.getSeconds()).padStart(2, '0');
+                const milliseconds = String(taskDate.getMilliseconds()).padStart(3, '0');
+                dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+            }
+        }
     }
     
     if (task.instrument_id && instrumentSelect) {
@@ -1843,32 +1896,11 @@ async function deleteSession(taskId) {
         });
         
         if (response.ok) {
-            console.log('Task deleted successfully');
+            console.log('✅ Task deleted successfully');
             
-            // Remove contribution record and subtract from total if session contributed time
-            // Normalize taskId to string for consistent lookup
-            const normalizedId = String(taskId);
-            
-            if (sessionTimeContributions[normalizedId] && sessionTimeContributions[normalizedId] > 0) {
-                const contributedTime = sessionTimeContributions[normalizedId];
-                console.log(`Found contribution for session ${taskId}: ${formatTimerTime(contributedTime)}`);
-                
-                // Subtract the contributed time from total
-                const oldTotal = totalPracticeTime;
-                totalPracticeTime = Math.max(0, totalPracticeTime - contributedTime);
-                saveTotalPracticeTime();
-                updateTotalTimeDisplay();
-                
-                // Remove contribution record
-                delete sessionTimeContributions[normalizedId];
-                saveSessionContributions();
-                
-                console.log(`Removed ${formatTimerTime(contributedTime)} from total. Old total: ${formatTimerTime(oldTotal)}, New total: ${formatTimerTime(totalPracticeTime)}`);
-            } else {
-                console.log(`No contribution found for session ${taskId}. Contributions:`, Object.keys(sessionTimeContributions));
-            }
-            
-            await loadTasks();
+            // Reload data from database after deletion (single source of truth)
+            await loadTasks(); // Reload all sessions
+            await loadTotalPracticeTime(); // Recalculate total from database
             closeModal('quick-add-task-modal');
             if (currentView === 'calendar') {
                 renderCurrentCalendarView();
@@ -2059,33 +2091,41 @@ function resetTimer() {
 }
 
 // Total Practice Time Functions
-function loadTotalPracticeTime() {
-    const saved = localStorage.getItem('totalPracticeTime');
-    if (saved) {
-        totalPracticeTime = parseInt(saved, 10) || 0;
-    } else {
+async function loadTotalPracticeTime() {
+    try {
+        console.log('📊 Loading total practice time from database...');
+        const response = await fetch(`${API_BASE_URL}/practice-sessions/total-time`, {
+            cache: 'no-cache'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            totalPracticeTime = data.total_time || 0;
+            console.log('✅ Total practice time loaded from database:', formatTimerTime(totalPracticeTime));
+        } else {
+            console.error('❌ Failed to load total practice time:', response.status);
+            totalPracticeTime = 0;
+        }
+    } catch (error) {
+        console.error('❌ Error loading total practice time:', error);
         totalPracticeTime = 0;
     }
+    
     updateTotalTimeDisplay();
     
-    // Load session contributions
-    loadSessionContributions();
+    // Load session contributions from database
+    await loadSessionContributions();
 }
 
 function saveTotalPracticeTime() {
-    // No longer saving to localStorage - total is calculated from database
-    // This function kept for compatibility but does nothing
-    console.log('Total practice time is calculated from database, not stored in localStorage');
+    // No-op: Total is always calculated from database, never stored separately
+    // This function kept for compatibility with existing code
 }
 
 function addToTotalPracticeTime(milliseconds, sessionId = null) {
-    // Note: This function is kept for compatibility but total time is now calculated from database
-    // The duration should be saved to the database when the session is created/updated
-    // Reload total time from database after session operations
-    console.log(`Time added (will be recalculated from database): ${formatTimerTime(milliseconds)} for session ${sessionId}`);
-    
-    // Reload from database to get accurate total
-    loadTotalPracticeTime();
+    // No-op: Total is calculated from database, not incremented locally
+    // Duration is saved to database when session is created/updated
+    // Total will be recalculated from database after mutations
+    console.log(`⏱️ Time logged: ${formatTimerTime(milliseconds)} for session ${sessionId} (will be saved to database)`);
 }
 
 // Session Contribution Tracking Functions - Now reads from database
@@ -2120,9 +2160,8 @@ async function loadSessionContributions() {
 }
 
 function saveSessionContributions() {
-    // No longer saving to localStorage - data is in database
-    // This function kept for compatibility but does nothing
-    console.log('Session contributions are stored in database, not localStorage');
+    // No-op: Session contributions are loaded from database, never stored separately
+    // This function kept for compatibility with existing code
 }
 
 function hasSessionContributed(sessionId) {
@@ -2208,27 +2247,23 @@ async function resetTotalPracticeTime() {
     }
 }
 
-function syncTotalWithContributions() {
-    // Calculate total from all contributions
-    const totalFromContributions = Object.values(sessionTimeContributions).reduce((sum, time) => sum + time, 0);
-    
-    // Update total practice time to match contributions
+async function syncTotalWithContributions() {
+    // Reload total time from database (single source of truth)
     const oldTotal = totalPracticeTime;
-    totalPracticeTime = totalFromContributions;
-    saveTotalPracticeTime();
-    updateTotalTimeDisplay();
+    await loadTotalPracticeTime();
     
-    console.log(`Synced total practice time: ${formatTimerTime(oldTotal)} → ${formatTimerTime(totalPracticeTime)}`);
+    console.log(`🔄 Synced total practice time from database: ${formatTimerTime(oldTotal)} → ${formatTimerTime(totalPracticeTime)}`);
     
     // Refresh the history view if open
-    if (document.getElementById('contribution-history-modal').style.display === 'block') {
+    const historyModal = document.getElementById('contribution-history-modal');
+    if (historyModal && historyModal.classList.contains('active')) {
         renderContributionHistory();
     }
     
-    alert(`Total practice time synced with contributions.\n\nOld total: ${formatTimerTime(oldTotal)}\nNew total: ${formatTimerTime(totalPracticeTime)}`);
+    alert(`Total practice time synced from database.\n\nOld total: ${formatTimerTime(oldTotal)}\nNew total: ${formatTimerTime(totalPracticeTime)}`);
 }
 
-function openContributionHistory() {
+async function openContributionHistory() {
     const modal = document.getElementById('contribution-history-modal');
     const loadingDiv = document.getElementById('contribution-history-loading');
     const listDiv = document.getElementById('contribution-history-list');
@@ -2239,12 +2274,8 @@ function openContributionHistory() {
     listDiv.style.display = 'none';
     emptyDiv.style.display = 'none';
     
-    openModal('contribution-history-modal');
-    
-    // Load and display history
-    setTimeout(() => {
-        renderContributionHistory();
-    }, 100);
+    // openModal will reload data and render history
+    await openModal('contribution-history-modal');
 }
 
 function renderContributionHistory() {
@@ -2314,21 +2345,42 @@ function renderContributionHistory() {
         let sessionTime = '';
         
         if (task && task.due_date) {
-            const dateObj = new Date(task.due_date);
-            // Format date: "Dec 26, 2025"
-            const dateStr = dateObj.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric'
-            });
-            // Format time: "1:30 PM" or "13:30"
-            const timeStr = dateObj.toLocaleTimeString('en-US', { 
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-            });
-            sessionDate = dateStr;
-            sessionTime = timeStr;
+            // Parse due_date - handle date-only strings (YYYY-MM-DD) to avoid timezone issues
+            let dateObj;
+            const dateStr = task.due_date;
+            
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                // Date only - parse components directly to avoid timezone conversion
+                const [year, month, day] = dateStr.split('-').map(Number);
+                dateObj = new Date(year, month - 1, day); // month is 0-indexed
+                // For date-only, don't show time
+                sessionDate = dateObj.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric'
+                });
+                sessionTime = ''; // No time for date-only values
+            } else {
+                // Has time component - parse it
+                dateObj = new Date(dateStr);
+                if (isNaN(dateObj.getTime())) {
+                    sessionDate = 'Invalid date';
+                    sessionTime = '';
+                } else {
+                    // Format date: "Dec 26, 2025"
+                    sessionDate = dateObj.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric'
+                    });
+                    // Format time: "1:30 PM" or "13:30"
+                    sessionTime = dateObj.toLocaleTimeString('en-US', { 
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+                }
+            }
         }
         const isCompleted = task && task.completed;
         
@@ -2434,13 +2486,23 @@ async function removeContributionFromHistory(sessionId) {
         });
         
         if (response.ok) {
-            // Reload total time from database
-            await loadTotalPracticeTime();
+            // Reload data from database after update (single source of truth)
+            await loadTasks(); // Reload all sessions (session still exists, just duration is null)
+            await loadTotalPracticeTime(); // Recalculate total from database
             
-            // Re-render the history
+            // Refresh calendar view FIRST to update session display
+            if (currentView === 'calendar') {
+                renderCurrentCalendarView();
+                // Also refresh the selected date tasks view if a date is selected
+                if (selectedDate) {
+                    showTasksForDate(selectedDate);
+                }
+            }
+            
+            // Re-render the history AFTER calendar update
             renderContributionHistory();
             
-            console.log(`Removed contribution ${normalizedId} (${timeFormatted}) from database`);
+            console.log(`✅ Removed contribution ${normalizedId} (${timeFormatted}) from database`);
         } else {
             alert('Failed to remove contribution from database.');
         }
@@ -2486,28 +2548,50 @@ async function handleRemoveTimeFromSession() {
         return;
     }
     
-    // Normalize taskId to string for consistent lookup
-    const normalizedId = String(taskId);
-    
-    // Remove the time from total
-    totalPracticeTime = Math.max(0, totalPracticeTime - contributedTime);
-    saveTotalPracticeTime();
-    updateTotalTimeDisplay();
-    
-    // Remove contribution record
-    delete sessionTimeContributions[normalizedId];
-    saveSessionContributions();
-    
-    // Update the indicator (will hide it since there's no contribution now)
-    updateContributionIndicator(taskId);
-    
-    // Refresh calendar view to update checkmarks
-    if (currentView === 'calendar') {
-        renderCurrentCalendarView();
+    // Update the session in database to remove duration
+    try {
+        const session = tasks.find(t => String(t.id) === String(taskId));
+        if (!session) {
+            alert('Session not found.');
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/practice-sessions/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                instrument_id: session.instrument_id,
+                practice_session_definition_id: session.practice_session_definition_id || '',
+                due_date: session.due_date,
+                start_time: session.start_time || null,
+                end_time: session.end_time || null,
+                duration: null, // Remove duration
+                notes: session.notes || null
+            })
+        });
+        
+        if (response.ok) {
+            // Reload data from database after update (single source of truth)
+            await loadTasks(); // Reload sessions
+            await loadTotalPracticeTime(); // Recalculate total from database
+            
+            // Update the indicator (will hide it since there's no contribution now)
+            updateContributionIndicator(taskId);
+            
+            // Refresh calendar view to update checkmarks
+            if (currentView === 'calendar') {
+                renderCurrentCalendarView();
+            }
+            
+            console.log(`✅ Removed ${timeFormatted} from database for session ${taskId}`);
+            alert(`Time contribution removed successfully!\n\n${timeFormatted} has been removed from the database.`);
+        } else {
+            alert('Failed to remove contribution from database.');
+        }
+    } catch (error) {
+        console.error('Error removing contribution:', error);
+        alert('Failed to remove contribution: ' + error.message);
     }
-    
-    console.log(`Removed ${timeFormatted} from total practice time for session ${taskId}`);
-    alert(`Time contribution removed successfully!\n\n${timeFormatted} has been subtracted from your total practice time.`);
 }
 
 function updateFullDateTimeDisplay() {
@@ -2755,14 +2839,15 @@ async function handleQuickAddTask(e) {
                 const result = await response.json();
                 console.log('✅ Practice session created successfully:', result);
                 
-                // Add timer time to total if we have duration
-                if (duration && duration > 0 && result.id) {
-                    addToTotalPracticeTime(duration, result.id);
-                    // Reset timer after adding to total
+                // Reload data from database after creation (single source of truth)
+                await loadTasks(); // Reload all sessions
+                await loadTotalPracticeTime(); // Recalculate total from database
+                
+                // Reset timer after session is saved
+                if (duration && duration > 0) {
                     resetTimer();
                 }
                 
-                await loadTasks();
                 closeModal('quick-add-task-modal');
                 renderCurrentCalendarView();
                 alert('Session added successfully!');
@@ -2904,32 +2989,11 @@ async function handleQuickAction(action, taskId) {
                     });
                     
                     if (response.ok) {
-                        console.log('Task deleted successfully');
+                        console.log('✅ Task deleted successfully');
                         
-                        // Remove contribution record and subtract from total if session contributed time
-                        // Normalize taskId to string for consistent lookup
-                        const normalizedId = String(taskId);
-                        
-                        if (sessionTimeContributions[normalizedId] && sessionTimeContributions[normalizedId] > 0) {
-                            const contributedTime = sessionTimeContributions[normalizedId];
-                            console.log(`Found contribution for session ${taskId}: ${formatTimerTime(contributedTime)}`);
-                            
-                            // Subtract the contributed time from total
-                            const oldTotal = totalPracticeTime;
-                            totalPracticeTime = Math.max(0, totalPracticeTime - contributedTime);
-                            saveTotalPracticeTime();
-                            updateTotalTimeDisplay();
-                            
-                            // Remove contribution record
-                            delete sessionTimeContributions[normalizedId];
-                            saveSessionContributions();
-                            
-                            console.log(`Removed ${formatTimerTime(contributedTime)} from total. Old total: ${formatTimerTime(oldTotal)}, New total: ${formatTimerTime(totalPracticeTime)}`);
-                        } else {
-                            console.log(`No contribution found for session ${taskId}. Contributions:`, Object.keys(sessionTimeContributions));
-                        }
-                        
-                        await loadTasks();
+                        // Reload data from database after deletion (single source of truth)
+                        await loadTasks(); // Reload all sessions
+                        await loadTotalPracticeTime(); // Recalculate total from database
                         if (currentView === 'calendar') {
                             renderCurrentCalendarView();
                             // Refresh the selected date tasks view if a date is selected
@@ -3646,13 +3710,27 @@ function loadDashboardMetrics() {
 async function openModal(modalId) {
     document.getElementById(modalId).classList.add('active');
     
+    // Only load fresh data if needed (not on every dialog open)
+    // Data is loaded on page load and after mutations
+    
     // If opening task-def-modal, ensure instrument is set to primary
     if (modalId === 'task-def-modal') {
+        // Only reload if instruments aren't loaded
+        if (instruments.length === 0) {
+            await loadInstruments();
+        }
         await populateInstrumentSelect();
     }
     
     // If opening quick-add-task-modal, ensure instrument is set to primary (Trumpet) and practice type is set
     if (modalId === 'quick-add-task-modal') {
+        // Only reload if data isn't loaded
+        if (instruments.length === 0) {
+            await loadInstruments();
+        }
+        if (practiceSessionDefinitions.length === 0) {
+            await loadPracticeSessionDefinitions();
+        }
         await populateQuickAddInstrumentSelect();
         await populatePracticeTypeSelect();
         
@@ -3668,13 +3746,13 @@ async function openModal(modalId) {
                 console.log('✅ Force-set instrument to Trumpet in openModal');
             }
         }
-        
-        // Set task type to 'Practice' as default
-        const taskTypeSelect = document.getElementById('quick-task-type');
-        if (taskTypeSelect) {
-            taskTypeSelect.value = 'Practice';
-            console.log('Set task type to Practice');
-        }
+    }
+    
+    // If opening contribution-history-modal, reload data (this is a data view)
+    if (modalId === 'contribution-history-modal') {
+        await loadTasks(); // Reload sessions
+        await loadTotalPracticeTime(); // Reload total time
+        renderContributionHistory(); // Refresh display
     }
 }
 

@@ -1752,11 +1752,21 @@ label {
     z-index: 1;
 }
 
+/* Exception: close button must remain absolutely positioned */
+#quick-add-task-modal .modal-content > .modal-close {
+    position: absolute !important;
+}
+
 /* Enhance text readability on the background */
 #quick-add-task-modal .modal-content h2,
 #quick-add-task-modal .modal-content label,
 #quick-add-task-modal .modal-content small {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Prevent h2 from overlapping close button */
+#quick-add-task-modal .modal-content h2 {
+    padding-right: 3rem;
 }
 
 .modal-close {
@@ -1772,15 +1782,25 @@ label {
     z-index: 10;
 }
 
-/* Make close button even higher for the session modal */
+/* Make close button even higher for the session modal - positioned on the right */
 #quick-add-task-modal .modal-close {
-    top: -1rem;
-    right: 0.25rem;
+    top: 0.75rem !important;
+    right: 1rem !important;
+    left: auto !important;
+    z-index: 100 !important;
+    padding: 0.5rem !important;
+    margin: -0.5rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 #contribution-history-modal .modal-close {
     top: 0.75rem;
-    right: 1rem;
+    right: 1rem !important;
+    left: auto !important;
 }
 
 .modal-close:hover {
