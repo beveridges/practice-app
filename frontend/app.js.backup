@@ -3,7 +3,7 @@
  * Handles instruments, tasks, calendar, and analytics
  */
 
-const API_BASE_URL = 'http://192.168.78.129:8000/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 // State
 let instruments = [];
@@ -35,7 +35,7 @@ let timerRunning = false;
 // Total practice time (stored in milliseconds)
 let totalPracticeTime = 0;
 
-// Time format mode: 0 = HH:MM:SS, 1 = hours, 2 = days, 3 = Xhr Ymin Zsec, 4 = 10000 - hours
+// Time format mode: 0 = HH:MM:SS, 1 = hours, 2 = days
 let timeFormatMode = parseInt(localStorage.getItem('timeFormatMode')) || 0;
 
 // Session time contributions (maps session ID to milliseconds contributed)
@@ -167,8 +167,8 @@ function setupEventListeners() {
         timeFormatRing.style.cursor = 'pointer';
         timeFormatRing.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Cycle through formats: 0 -> 1 -> 2 -> 3 -> 4 -> 0
-            timeFormatMode = (timeFormatMode + 1) % 5;
+            // Cycle through formats: 0 -> 1 -> 2 -> 0
+            timeFormatMode = (timeFormatMode + 1) % 3;
             localStorage.setItem('timeFormatMode', timeFormatMode);
             updateTotalTimeDisplay();
         });
@@ -532,7 +532,7 @@ function switchView(viewName) {
             renderCurrentCalendarView();
         }
     } else if (viewName === 'tasks') {
-        // Ensure tasks are loaded from database first, then render Practice History
+        // Ensure tasks are loaded from database first, then render Contribution History
         loadTasks().then(() => {
             renderContributionHistory();
         });
@@ -787,6 +787,7 @@ async function renderInstruments() {
                 <div>
                     <div class="instrument-name">${escapeHtml(instr.name)}</div>
                     <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
+                        <span class="instrument-category">${escapeHtml(instr.category)}</span>
                         <span class="instrument-category" style="background: ${instr.instrument_type === 'Primary' ? '#4CAF50' : '#FF9800'}; color: white;">${escapeHtml(instr.instrument_type || 'Primary')}</span>
                     </div>
                 </div>
@@ -801,6 +802,32 @@ async function renderInstruments() {
     `).join('');
 }
 
+// Helper function to determine category from instrument name
+function getInstrumentCategory(instrumentName) {
+    if (!instrumentName) return "Other";
+    
+    const name = instrumentName.toLowerCase();
+    
+    // Map instruments to categories (matching backend/instrument_list.py structure)
+    const categoryMap = {
+        "Woodwind": ["flute", "piccolo", "clarinet", "oboe", "bassoon", "saxophone", "recorder", "harmonica", "accordion", "bagpipes", "ocarina"],
+        "Brass": ["trumpet", "cornet", "flugelhorn", "trombone", "tuba", "french horn", "euphonium", "baritone", "mellophone", "bugle"],
+        "Plucked string": ["guitar", "ukulele", "mandolin", "banjo", "harp", "sitar", "lute", "zither", "balalaika", "bouzouki"],
+        "Bowed string": ["violin", "viola", "cello", "double bass", "bass", "erhu", "sarangi"],
+        "Percussion": ["drum", "cymbal", "tambourine", "triangle", "maraca", "conga", "bongo", "djembe", "xylophone", "marimba", "vibraphone", "glockenspiel", "gong"],
+        "Keyboard": ["piano", "keyboard", "organ", "harpsichord", "synthesizer", "celesta", "melodica"],
+        "Voice": ["voice", "choir", "beatbox"],
+        "Electronic": ["synthesizer", "drum machine", "sampler", "theremin", "turntable", "midi"],
+    };
+    
+    for (const [category, keywords] of Object.entries(categoryMap)) {
+        if (keywords.some(keyword => name.includes(keyword))) {
+            return category;
+        }
+    }
+    
+    return "Other";
+}
 
 async function renderQuickAddInstrumentButtons() {
     const container = document.getElementById('quick-add-instruments');
@@ -862,14 +889,16 @@ async function renderQuickAddInstrumentButtons() {
 }
 
 async function quickAddInstrument(instrumentName, instrumentType) {
-    // Category is set to "Other" by default (not shown in UI)
+    // Determine category from instrument name
+    const category = getInstrumentCategory(instrumentName);
+    
     try {
         const response = await fetch(`${API_BASE_URL}/instruments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 name: instrumentName, 
-                category: 'Other', // Default category (not shown in UI) 
+                category: category, 
                 instrument_type: instrumentType,
                 notes: null
                 // user_profile_id is optional - omit it for private app
@@ -893,12 +922,17 @@ async function handleInstrumentSubmit(e) {
     e.preventDefault();
     
     const name = document.getElementById('instrument-name').value.trim();
+    const category = document.getElementById('instrument-category').value;
     const instrumentType = document.getElementById('instrument-instrument-type').value;
     const notes = document.getElementById('instrument-notes').value.trim();
     
     // Validate required fields
     if (!name) {
         alert('Please enter an instrument name');
+        return;
+    }
+    if (!category) {
+        alert('Please select a category');
         return;
     }
     if (!instrumentType) {
@@ -908,10 +942,9 @@ async function handleInstrumentSubmit(e) {
     
     try {
         // Build request body - ensure all values are correct types and match backend enums exactly
-        // Category is set to "Other" by default (not shown in UI)
         const requestBody = { 
             name: name.trim(), 
-            category: 'Other', // Default category (not shown in UI)
+            category: category, // Must match InstrumentCategory enum exactly
             instrument_type: instrumentType || 'Primary', // Must match InstrumentType enum: "Primary" or "Secondary"
             notes: notes ? notes.trim() : null
             // user_profile_id is optional - omit it for private app
@@ -1025,7 +1058,7 @@ async function openInstrumentModal(instrumentsId = null) {
         const instr = instruments.find(i => i.id === instrumentsId);
         title.textContent = 'Edit Instrument';
         document.getElementById('instrument-name').value = instr.name;
-        // Category field removed from UI - always uses "Other" as default
+        document.getElementById('instrument-category').value = instr.category;
         document.getElementById('instrument-instrument-type').value = instr.instrument_type || 'Primary';
         document.getElementById('instrument-notes').value = instr.notes || '';
     } else {
@@ -1379,39 +1412,19 @@ function renderDayView(date) {
     // Get filtered tasks for this date
     const filteredTasks = getFilteredTasks();
     const dayTasks = filteredTasks.filter(t => {
-        // Use due_date if available (backward compatibility), otherwise extract from start_time
-        let taskDate = null;
-        if (t.due_date) {
-            taskDate = t.due_date.split('T')[0]; // Remove time if present
-        } else if (t.start_time) {
-            taskDate = t.start_time.split('T')[0]; // Extract date from start_time
-        }
-        if (!taskDate) return false;
+        if (!t.due_date) return false;
+        // Normalize the task's due_date to YYYY-MM-DD format
+        const taskDate = t.due_date.split('T')[0]; // Remove time if present
         return taskDate === selectedDate;
     });
-    
-    // Separate tasks: those WITH start_time/end_time go to time slots, those WITHOUT go to "All Day"
-    // Check if start_time/end_time exist and are valid (not null, undefined, or empty string)
-    const tasksWithTime = dayTasks.filter(t => {
-        const hasStartTime = t.start_time && (typeof t.start_time === 'string' ? t.start_time.trim() !== '' : true);
-        const hasEndTime = t.end_time && (typeof t.end_time === 'string' ? t.end_time.trim() !== '' : true);
-        return hasStartTime || hasEndTime;
-    });
-    const tasksWithoutTime = dayTasks.filter(t => {
-        const hasStartTime = t.start_time && (typeof t.start_time === 'string' ? t.start_time.trim() !== '' : true);
-        const hasEndTime = t.end_time && (typeof t.end_time === 'string' ? t.end_time.trim() !== '' : true);
-        return !hasStartTime && !hasEndTime;
-    });
-    
-    // Filter by completion status
-    const allDayTasks = tasksWithoutTime.filter(t => !t.completed || activeFilters.showCompleted);
+    const allDayTasks = dayTasks.filter(t => !t.completed || activeFilters.showCompleted);
     const completedTasks = dayTasks.filter(t => t.completed);
     
-    // Render all-day tasks (only those without start_time/end_time)
+    // Render all-day tasks
     const allDayContainer = document.getElementById('all-day-tasks');
     if (allDayContainer) {
         if (allDayTasks.length === 0) {
-            allDayContainer.innerHTML = '<p class="empty-state">No all-day tasks</p>';
+            allDayContainer.innerHTML = '<p class="empty-state">No tasks for this day</p>';
         } else {
             allDayContainer.innerHTML = allDayTasks.map(task => renderEnhancedTaskCard(task, true)).join('');
         }
@@ -1432,81 +1445,11 @@ function renderDayView(date) {
             // Check if current time is in this slot
             const isCurrentHour = isToday && now.getHours() === hour;
             
-            // Find tasks for this hour (tasks with start_time matching this hour)
-            // Also include tasks that span this hour (start_time before and end_time after)
-            const hourTasks = tasksWithTime.filter(task => {
-                if (!task.start_time) return false;
-                // Parse UTC time and convert to local timezone
-                const startTime = parseUTCToLocal(task.start_time);
-                if (!startTime) return false;
-                const startHour = startTime.getHours();
-                
-                // Task starts in this hour
-                if (startHour === hour) return true;
-                
-                // Task spans this hour (starts before and ends after)
-                if (task.end_time) {
-                    const endTime = parseUTCToLocal(task.end_time);
-                    if (!endTime) return false;
-                    const endHour = endTime.getHours();
-                    return startHour < hour && endHour >= hour;
-                }
-                
-                return false;
-            });
-            
-            // Render tasks for this hour
-            let tasksHtml = '';
-            hourTasks.forEach(task => {
-                const instrumentsName = instruments.find(e => e.id === task.instrument_id)?.name || 'Unknown';
-                const hasContributed = hasSessionContributed(task.id);
-                const contributedClass = hasContributed ? 'has-contributed' : '';
-                
-                // Format time range - use local timezone
-                let timeDisplay = '';
-                if (task.start_time) {
-                    const startTime = parseUTCToLocal(task.start_time);
-                    if (startTime) {
-                        const startStr = startTime.toLocaleTimeString('en-US', { 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                        });
-                        
-                        if (task.end_time) {
-                            const endTime = parseUTCToLocal(task.end_time);
-                            if (endTime) {
-                                const endStr = endTime.toLocaleTimeString('en-US', { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit',
-                                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                                });
-                                timeDisplay = `${startStr} - ${endStr}`;
-                            } else {
-                                timeDisplay = startStr;
-                            }
-                        } else {
-                            timeDisplay = startStr;
-                        }
-                    }
-                }
-                
-                tasksHtml += `
-                    <div class="hour-task-item ${contributedClass}" 
-                         onclick="event.stopPropagation(); openModifySessionModal('${task.id}')" 
-                         title="Click to modify: ${escapeHtml(instrumentsName)}${timeDisplay ? ` (${timeDisplay})` : ''}">
-                        <span class="hour-task-instrument">${escapeHtml(instrumentsName)}</span>
-                        ${timeDisplay ? `<span class="hour-task-time">${timeDisplay}</span>` : ''}
-                    </div>
-                `;
-            });
-            
             html += `
                 <div class="hour-row ${isCurrentHour ? 'current-hour' : ''}" data-hour="${hour}">
                     <div class="hour-label">${formatHour(hour)}</div>
                     <div class="hour-content" onclick="createTaskFromCalendar(null, ${hour})">
                         <div class="current-time-indicator" style="display: ${isCurrentHour && now.getMinutes() > 0 ? 'block' : 'none'}; top: ${(now.getMinutes() / 60) * 100}%;"></div>
-                        ${tasksHtml}
                     </div>
                 </div>
             `;
@@ -1559,35 +1502,6 @@ function renderWeekView(startDate) {
         `;
     });
     
-    // Pre-calculate all day tasks for each day (tasks without start_time/end_time)
-    const allDayTasksByDate = {};
-    weekDays.forEach(day => {
-        const dateStr = day.toISOString().split('T')[0];
-        const filteredTasks = getFilteredTasks();
-        const dayTasks = filteredTasks.filter(t => {
-            const taskDate = getTaskDate(t);
-            if (!taskDate) return false;
-            return taskDate === dateStr;
-        });
-        
-        // Separate tasks with time vs without time
-        const tasksWithTime = dayTasks.filter(t => {
-            const hasStartTime = t.start_time && (typeof t.start_time === 'string' ? t.start_time.trim() !== '' : true);
-            const hasEndTime = t.end_time && (typeof t.end_time === 'string' ? t.end_time.trim() !== '' : true);
-            return hasStartTime || hasEndTime;
-        });
-        const tasksWithoutTime = dayTasks.filter(t => {
-            const hasStartTime = t.start_time && (typeof t.start_time === 'string' ? t.start_time.trim() !== '' : true);
-            const hasEndTime = t.end_time && (typeof t.end_time === 'string' ? t.end_time.trim() !== '' : true);
-            return !hasStartTime && !hasEndTime;
-        });
-        
-        allDayTasksByDate[dateStr] = {
-            withTime: tasksWithTime,
-            withoutTime: tasksWithoutTime
-        };
-    });
-    
     // Time slots column
     for (let hour = 6; hour <= 23; hour++) {
         html += `<div class="week-hour-label">${formatHour(hour)}</div>`;
@@ -1595,39 +1509,19 @@ function renderWeekView(startDate) {
         // Day columns
         weekDays.forEach(day => {
             const dateStr = day.toISOString().split('T')[0];
-            const dayTasksData = allDayTasksByDate[dateStr] || { withTime: [], withoutTime: [] };
-            
-            // Filter tasks with time that belong in this hour slot
-            const hourTasks = dayTasksData.withTime.filter(task => {
-                if (!task.start_time) return false;
-                // Parse UTC time and convert to local timezone
-                const startTime = parseUTCToLocal(task.start_time);
-                if (!startTime) return false;
-                const startHour = startTime.getHours();
-                
-                // Task starts in this hour
-                if (startHour === hour) return true;
-                
-                // Task spans this hour (starts before and ends after)
-                if (task.end_time) {
-                    const endTime = parseUTCToLocal(task.end_time);
-                    if (!endTime) return false;
-                    const endHour = endTime.getHours();
-                    return startHour < hour && endHour >= hour;
-                }
-                
-                return false;
+            const filteredTasks = getFilteredTasks();
+            const dayTasks = filteredTasks.filter(t => {
+                if (!t.due_date) return false;
+                // Normalize the task's due_date to YYYY-MM-DD format
+                const taskDate = t.due_date.split('T')[0]; // Remove time if present
+                return taskDate === dateStr;
             });
-            
-            // For the first hour (6 AM), also show tasks without time (all-day tasks)
-            const tasksToShow = hour === 6 
-                ? [...hourTasks, ...dayTasksData.withoutTime]
-                : hourTasks;
+            const hourTasks = dayTasks; // For now, all tasks shown (can be filtered by time later)
             
             html += `
                 <div class="week-day-cell" data-date="${dateStr}" data-hour="${hour}" 
                      onclick="createTaskFromCalendar(null, ${hour})">
-                    ${tasksToShow.length > 0 ? tasksToShow.map(t => renderTaskMiniCard(t)).join('') : ''}
+                    ${hourTasks.length > 0 ? hourTasks.map(t => renderTaskMiniCard(t)).join('') : ''}
                 </div>
             `;
         });
@@ -1675,8 +1569,7 @@ function renderMonthView() {
     if (filteredTasks.length > 0) {
         console.log('All filtered task dates:', filteredTasks.map(t => ({ 
             due_date: t.due_date, 
-            start_time: t.start_time,
-            normalized: getTaskDate(t) || 'NO DATE',
+            normalized: t.due_date ? t.due_date.split('T')[0] : 'NO DATE',
             task_type: t.task_type,
             completed: t.completed 
         })));
@@ -1684,8 +1577,8 @@ function renderMonthView() {
     
     // Special debug for December 23rd
     const dec23Tasks = filteredTasks.filter(t => {
-        const taskDate = getTaskDate(t);
-        if (!taskDate) return false;
+        if (!t.due_date) return false;
+        const taskDate = t.due_date.split('T')[0];
         return taskDate === '2024-12-23' || taskDate === '2025-12-23';
     });
     if (dec23Tasks.length > 0) {
@@ -1697,11 +1590,12 @@ function renderMonthView() {
         
         // Normalize date comparison - handle both YYYY-MM-DD and other formats
         const dayTasks = filteredTasks.filter(t => {
-            const taskDate = getTaskDate(t);
-            if (!taskDate) {
-                console.warn('Task with no date (no due_date or start_time):', t);
+            if (!t.due_date) {
+                console.warn('Task with no due_date:', t);
                 return false;
             }
+            // Normalize the task's due_date to YYYY-MM-DD format
+            const taskDate = t.due_date.split('T')[0]; // Remove time if present
             const matches = taskDate === dateStr;
             if (matches && dateStr === '2024-12-23') {
                 console.log('✅ Match found for Dec 23:', t);
@@ -1795,90 +1689,6 @@ function selectDateAndShowTasks(dateStr) {
         renderCurrentCalendarView();
     }
     showTasksForDate(dateStr);
-}
-
-// Helper function to get date from task (uses due_date if available, otherwise start_time)
-function getTaskDate(task) {
-    if (task.due_date) {
-        return task.due_date.split('T')[0];
-    } else if (task.start_time) {
-        return task.start_time.split('T')[0];
-    }
-    return null;
-}
-
-// Helper function to convert datetime-local input value to ISO string (UTC)
-// datetime-local values are in local timezone, so we need to create a Date object
-// treating it as local time, then convert to UTC ISO string
-function datetimeLocalToISO(dateTimeValue) {
-    if (!dateTimeValue) return null;
-    
-    // datetime-local format: "YYYY-MM-DDTHH:mm:ss" or "YYYY-MM-DDTHH:mm:ss.sss" (no timezone)
-    // Parse it as local time by creating Date object with explicit local components
-    const [datePart, timePart] = dateTimeValue.split('T');
-    if (!datePart) return null;
-    
-    const [year, month, day] = datePart.split('-').map(Number);
-    const timeComponents = (timePart || '00:00:00').split(':');
-    const hour = Number(timeComponents[0] || 0);
-    const minute = Number(timeComponents[1] || 0);
-    const secondPart = timeComponents[2] || '00';
-    const second = Number(secondPart.split('.')[0] || 0);
-    
-    // Create Date object in local timezone (month is 0-indexed)
-    const dateTimeObj = new Date(year, month - 1, day, hour, minute, second);
-    
-    // Check if date is valid
-    if (isNaN(dateTimeObj.getTime())) {
-        console.error('Invalid datetime value:', dateTimeValue);
-        return null;
-    }
-    
-    // Log for debugging (uncomment if needed for troubleshooting)
-    // console.log('datetimeLocalToISO:', {
-    //     input: dateTimeValue,
-    //     localTime: dateTimeObj.toString(),
-    //     localHours: dateTimeObj.getHours(),
-    //     localMinutes: dateTimeObj.getMinutes(),
-    //     utcISO: dateTimeObj.toISOString(),
-    //     timezoneOffset: dateTimeObj.getTimezoneOffset()
-    // });
-    
-    // Convert to ISO string (UTC) - this is what we store in the database
-    return dateTimeObj.toISOString();
-}
-
-// Helper function to parse UTC ISO string and return Date object in LOCAL timezone
-// This ensures we always display times in the device's local timezone
-function parseUTCToLocal(isoString) {
-    if (!isoString) return null;
-    
-    // Ensure the string is treated as UTC
-    // If it doesn't end with 'Z' and doesn't have a timezone offset, add 'Z'
-    let utcString = isoString;
-    if (!isoString.endsWith('Z') && !isoString.match(/[+-]\d{2}:\d{2}$/)) {
-        utcString = isoString + 'Z';
-    }
-    
-    // Create Date object - JavaScript automatically converts UTC to local time
-    const dateObj = new Date(utcString);
-    
-    if (isNaN(dateObj.getTime())) {
-        console.error('Invalid ISO string:', isoString);
-        return null;
-    }
-    
-    // Log for debugging (can be removed in production)
-    // console.log('parseUTCToLocal:', {
-    //     input: isoString,
-    //     utcString: utcString,
-    //     localTime: dateObj.toString(),
-    //     localHours: dateObj.getHours(),
-    //     localMinutes: dateObj.getMinutes(),
-    //     timezoneOffset: dateObj.getTimezoneOffset()
-    // });
-    
-    return dateObj;
 }
 
 // Filtering
@@ -2108,41 +1918,9 @@ async function openModifySessionModal(taskId) {
     // Populate practice type dropdown
     await populatePracticeTypeSelect();
     
-    // Set form values from task - use start_time if available, otherwise fall back to due_date
-    if (task.start_time) {
-        // Parse UTC start_time and convert to local time for datetime-local input
-        const startTimeLocal = parseUTCToLocal(task.start_time);
-        if (startTimeLocal) {
-            // Format as datetime-local value (YYYY-MM-DDTHH:mm:ss.sss) in LOCAL timezone
-            const year = startTimeLocal.getFullYear();
-            const month = String(startTimeLocal.getMonth() + 1).padStart(2, '0');
-            const day = String(startTimeLocal.getDate()).padStart(2, '0');
-            const hours = String(startTimeLocal.getHours()).padStart(2, '0');
-            const minutes = String(startTimeLocal.getMinutes()).padStart(2, '0');
-            const seconds = String(startTimeLocal.getSeconds()).padStart(2, '0');
-            const milliseconds = String(startTimeLocal.getMilliseconds()).padStart(3, '0');
-            dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
-            
-            console.log('Set datetime input from start_time:', {
-                utc: task.start_time,
-                local: startTimeLocal.toString(),
-                localHours: startTimeLocal.getHours(),
-                inputValue: dateInput.value
-            });
-        } else {
-            // Fallback to current date/time if parsing fails
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
-            dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
-        }
-    } else if (task.due_date) {
-        // Fallback to due_date if start_time not available
+    // Set form values from task
+    if (task.due_date) {
+        // Parse due_date - it might be a date-only string (YYYY-MM-DD) or include time
         let dateStr = task.due_date;
         
         // If it's a date-only string (YYYY-MM-DD), parse it directly to avoid timezone issues
@@ -2155,8 +1933,8 @@ async function openModifySessionModal(taskId) {
             const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
             dateInput.value = `${dateStr}T${hours}:${minutes}:${seconds}.${milliseconds}`;
         } else {
-            // Has time component - parse it carefully and convert to local
-            const taskDate = parseUTCToLocal(dateStr) || new Date(dateStr);
+            // Has time component - parse it carefully
+            const taskDate = new Date(dateStr);
             // Check if date is valid
             if (isNaN(taskDate.getTime())) {
                 console.error('Invalid date:', dateStr);
@@ -2298,13 +2076,12 @@ function setModalMode(mode, taskId = null) {
         if (timerLabel) timerLabel.textContent = 'Logged Practice Time';
         
         // Populate editable time input with current contribution if exists
-        // Use full format with milliseconds: HH:MM:SS.mmm
         if (editableTimeInput && taskId) {
             const contributedTime = getSessionContributedTime(taskId);
             if (contributedTime > 0) {
-                editableTimeInput.value = formatTimerTime(contributedTime); // Already returns HH:MM:SS.mmm format
+                editableTimeInput.value = formatTimerTime(contributedTime);
             } else {
-                editableTimeInput.value = '00:00:00.000';
+                editableTimeInput.value = '00:00:00';
             }
             // Ensure input is enabled and focusable
             editableTimeInput.disabled = false;
@@ -2514,19 +2291,13 @@ function formatTotalTime(milliseconds) {
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
     const days = Math.floor(hours / 24);
-    const decimalHours = milliseconds / (1000 * 3600); // More accurate decimal hours
     
     // Format based on current mode
     switch (timeFormatMode) {
         case 1: // Hours only
-            return `${hours}<span class="time-label"> hrs</span>`;
+            return `${hours}`;
         case 2: // Days only
-            return `${days}<span class="time-label"> days</span>`;
-        case 3: // Xhr Ymin Zsec format (e.g., 36hr 20min 01sec) with smaller labels - labels directly attached to numbers
-            return `${hours}<span class="time-label">hr</span> ${String(minutes).padStart(2, '0')}<span class="time-label">min</span> ${String(seconds).padStart(2, '0')}<span class="time-label">sec</span>`;
-        case 4: // 10000 - hours (decimal)
-            const remaining = 10000 - decimalHours;
-            return `${remaining.toFixed(2)}<span class="time-label"> hrs</span>`;
+            return `${days}`;
         default: // 0 = HH:MM:SS
             return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
@@ -2534,25 +2305,8 @@ function formatTotalTime(milliseconds) {
 
 function updateTotalTimeDisplay() {
     const display = document.getElementById('total-time-display');
-    const gladwellImage = document.getElementById('gladwell-malcolm-image');
-    
     if (display) {
-        const formatted = formatTotalTime(totalPracticeTime);
-        // Use innerHTML if format contains HTML (mode 1, 2, 3, or 4), otherwise use textContent
-        if (timeFormatMode === 1 || timeFormatMode === 2 || timeFormatMode === 3 || timeFormatMode === 4) {
-            display.innerHTML = formatted;
-        } else {
-            display.textContent = formatted;
-        }
-    }
-    
-    // Show/hide gladwell-malcolm image based on format mode
-    if (gladwellImage) {
-        if (timeFormatMode === 4) {
-            gladwellImage.style.display = 'block';
-        } else {
-            gladwellImage.style.display = 'none';
-        }
+        display.textContent = formatTotalTime(totalPracticeTime);
     }
 }
 
@@ -2649,7 +2403,7 @@ function renderContributionHistory() {
     
     // If elements don't exist in modal, they might be in tasks view (they have the same IDs)
     if (!loadingDiv || !listDiv || !emptyDiv) {
-        console.warn('Practice History elements not found');
+        console.warn('Contribution History elements not found');
         return;
     }
     
@@ -2663,13 +2417,7 @@ function renderContributionHistory() {
         }))
         .sort((a, b) => {
             // Sort by date (most recent first)
-            // Use start_time if available, otherwise fall back to due_date
-            const dateA = a.task.start_time ? parseUTCToLocal(a.task.start_time) : 
-                         (a.task.due_date ? parseUTCToLocal(a.task.due_date) || new Date(a.task.due_date) : new Date(0));
-            const dateB = b.task.start_time ? parseUTCToLocal(b.task.start_time) : 
-                         (b.task.due_date ? parseUTCToLocal(b.task.due_date) || new Date(b.task.due_date) : new Date(0));
-            if (!dateA || !dateB) return 0;
-            return dateB - dateA;
+            return new Date(b.task.due_date) - new Date(a.task.due_date);
         });
     
     if (contributions.length === 0) {
@@ -2716,33 +2464,12 @@ function renderContributionHistory() {
         const instrumentName = task && task.instrument_id 
             ? (instruments.find(i => i.id === task.instrument_id)?.name || 'Unknown')
             : 'Unknown';
-        
-        // Format date and time from start_time and end_time
+        // Format date and time separately for clarity
         let sessionDate = 'Date unknown';
-        let startTimeDisplay = '';
-        let endTimeDisplay = '';
+        let sessionTime = '';
         
-        // Use start_time if available, otherwise fall back to due_date
-        if (task && task.start_time) {
-            const startTimeObj = parseUTCToLocal(task.start_time);
-            if (startTimeObj) {
-                // Format date: "Dec 26, 2025" - use device's local timezone
-                sessionDate = startTimeObj.toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric',
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                });
-                // Format start time: "1:30 PM" - use device's local timezone
-                startTimeDisplay = startTimeObj.toLocaleTimeString('en-US', { 
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                });
-            }
-        } else if (task && task.due_date) {
-            // Fallback to due_date if start_time not available
+        if (task && task.due_date) {
+            // Parse due_date - handle date-only strings (YYYY-MM-DD) to avoid timezone issues
             let dateObj;
             const dateStr = task.due_date;
             
@@ -2750,21 +2477,28 @@ function renderContributionHistory() {
                 // Date only - parse components directly to avoid timezone conversion
                 const [year, month, day] = dateStr.split('-').map(Number);
                 dateObj = new Date(year, month - 1, day); // month is 0-indexed
+                // For date-only, don't show time
                 sessionDate = dateObj.toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'short', 
                     day: 'numeric'
                 });
+                sessionTime = ''; // No time for date-only values
             } else {
                 // Has time component - parse it
                 dateObj = new Date(dateStr);
-                if (!isNaN(dateObj.getTime())) {
+                if (isNaN(dateObj.getTime())) {
+                    sessionDate = 'Invalid date';
+                    sessionTime = '';
+                } else {
+                    // Format date: "Dec 26, 2025"
                     sessionDate = dateObj.toLocaleDateString('en-US', { 
                         year: 'numeric', 
                         month: 'short', 
                         day: 'numeric'
                     });
-                    startTimeDisplay = dateObj.toLocaleTimeString('en-US', { 
+                    // Format time: "1:30 PM" or "13:30"
+                    sessionTime = dateObj.toLocaleTimeString('en-US', { 
                         hour: '2-digit',
                         minute: '2-digit',
                         hour12: true
@@ -2772,20 +2506,6 @@ function renderContributionHistory() {
                 }
             }
         }
-        
-        // Format end time if available - use device's local timezone
-        if (task && task.end_time) {
-            const endTimeObj = parseUTCToLocal(task.end_time);
-            if (endTimeObj) {
-                endTimeDisplay = endTimeObj.toLocaleTimeString('en-US', { 
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-                });
-            }
-        }
-        
         const isCompleted = task && task.completed;
         
         html += `
@@ -2814,36 +2534,28 @@ function renderContributionHistory() {
                             ${formatTimerTime(time)}
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                            ${escapeHtml(sessionDate)}
+                            ${escapeHtml(sessionDate)}${sessionTime ? ` <span style="font-weight: 500; color: var(--text-primary);">${escapeHtml(sessionTime)}</span>` : ''}
                         </div>
-                        ${startTimeDisplay || endTimeDisplay ? `
-                        <div style="font-size: 0.8rem; color: var(--text-primary); margin-top: 0.25rem; font-weight: 500;">
-                            ${startTimeDisplay ? `<span>Start: ${escapeHtml(startTimeDisplay)}</span>` : ''}
-                            ${startTimeDisplay && endTimeDisplay ? ' • ' : ''}
-                            ${endTimeDisplay ? `<span>End: ${escapeHtml(endTimeDisplay)}</span>` : ''}
-                        </div>
-                        ` : ''}
                         <div style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;">
                             ${Math.round((time / totalContributed) * 100)}% of total
                         </div>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-                            <button type="button" onclick="deleteSessionFromHistory('${sessionId}')" 
-                                style="
-                                    padding: 0.4rem 0.8rem;
-                                    font-size: 0.8rem;
-                                    background: rgba(255, 59, 48, 0.1);
-                                    border: 1px solid rgba(255, 59, 48, 0.3);
-                                    color: #FF3B30;
-                                    border-radius: 4px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                "
-                                onmouseover="this.style.background='rgba(255, 59, 48, 0.2)'; this.style.borderColor='rgba(255, 59, 48, 0.5)'"
-                                onmouseout="this.style.background='rgba(255, 59, 48, 0.1)'; this.style.borderColor='rgba(255, 59, 48, 0.3)'"
-                                title="Delete this session completely">
-                                Delete Session
-                            </button>
-                        </div>
+                        <button type="button" onclick="removeContributionFromHistory('${sessionId}')" 
+                            style="
+                                margin-top: 0.75rem;
+                                padding: 0.4rem 0.8rem;
+                                font-size: 0.8rem;
+                                background: rgba(255, 59, 48, 0.1);
+                                border: 1px solid rgba(255, 59, 48, 0.3);
+                                color: #FF3B30;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255, 59, 48, 0.2)'; this.style.borderColor='rgba(255, 59, 48, 0.5)'"
+                            onmouseout="this.style.background='rgba(255, 59, 48, 0.1)'; this.style.borderColor='rgba(255, 59, 48, 0.3)'"
+                            title="Remove this contribution from total">
+                            Remove
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2920,50 +2632,7 @@ async function removeContributionFromHistory(sessionId) {
         }
     } catch (error) {
         console.error('Error removing contribution:', error);
-            alert('Failed to remove contribution: ' + error.message);
-    }
-}
-
-async function deleteSessionFromHistory(sessionId) {
-    // Normalize sessionId to string for consistent lookup
-    const normalizedId = String(sessionId);
-    
-    // Find the session to get its details for confirmation
-    const session = tasks.find(t => String(t.id) === normalizedId);
-    if (!session) {
-        alert('Session not found.');
-        return;
-    }
-    
-    const timeFormatted = session.duration ? formatTimerTime(session.duration) : '0:00:00';
-    const instrumentName = session.instrument_id 
-        ? (instruments.find(i => i.id === session.instrument_id)?.name || 'Unknown')
-        : 'Unknown';
-    
-    if (!confirm(`Are you sure you want to DELETE this practice session?\n\nInstrument: ${instrumentName}\nTime: ${timeFormatted}\n\nThis will permanently delete the session and remove it from the calendar.`)) {
-        return;
-    }
-    
-    // Call the existing deleteSession function
-    try {
-        // Temporarily store current view to refresh calendar regardless
-        const wasInTasksView = currentView === 'tasks';
-        
-        await deleteSession(normalizedId);
-        
-        // Always refresh calendar to remove blue bar, even if we're in tasks view
-        renderCurrentCalendarView();
-        if (selectedDate) {
-            showTasksForDate(selectedDate);
-        }
-        
-        // Refresh practice history if we're in tasks view
-        if (wasInTasksView) {
-            renderContributionHistory();
-        }
-    } catch (error) {
-        console.error('Error deleting session from history:', error);
-        alert('Failed to delete session: ' + error.message);
+        alert('Failed to remove contribution: ' + error.message);
     }
 }
 
@@ -3193,64 +2862,35 @@ async function handleQuickAddTask(e) {
             if (editableTimeInput && editableTimeContainer && editableTimeContainer.style.display !== 'none') {
                 const timeValue = editableTimeInput.value.trim();
                 if (timeValue) {
-                    // Parse HH:MM:SS.mmm or HH:MM:SS format
-                    // Allow optional milliseconds: HH:MM:SS or HH:MM:SS.mmm
-                    const timeMatch = timeValue.match(/^(\d{1,2}):([0-5][0-9]):([0-5][0-9])(?:\.(\d{1,3}))?$/);
-                    if (timeMatch) {
-                        const hours = parseInt(timeMatch[1], 10);
-                        const minutes = parseInt(timeMatch[2], 10);
-                        const seconds = parseInt(timeMatch[3], 10);
-                        const milliseconds = timeMatch[4] ? parseInt(timeMatch[4].padEnd(3, '0').substring(0, 3), 10) : 0;
-                        
-                        // Calculate total duration in milliseconds
-                        duration = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds;
-                        
-                        // Duration will be saved to database when session is updated
-                        console.log(`Updated session ${taskId} duration to ${formatTimerTime(duration)}`);
+                    // Parse HH:MM:SS format
+                    const timeMatch = timeValue.match(/^(\d{1,2}):([0-5][0-9]):([0-5][0-9])$/);
+                        if (timeMatch) {
+                            const hours = parseInt(timeMatch[1], 10);
+                            const minutes = parseInt(timeMatch[2], 10);
+                            const seconds = parseInt(timeMatch[3], 10);
+                            duration = (hours * 3600 + minutes * 60 + seconds) * 1000;
+                            
+                            // Duration will be saved to database when session is updated
+                            console.log(`Updated session ${taskId} duration to ${formatTimerTime(duration)}`);
                     } else {
-                        alert('Invalid time format. Please use HH:MM:SS.mmm format (e.g., 01:30:45.861) or HH:MM:SS (e.g., 01:30:45)');
+                        alert('Invalid time format. Please use HH:MM:SS format (e.g., 01:30:45)');
                         if (submitButton) {
                             submitButton.disabled = false;
                             submitButton.textContent = originalButtonText;
                         }
                         return;
                     }
-                } else {
-                    // If time is empty, duration will be set to null in database
-                    duration = null;
-                    console.log(`Removing duration from session ${taskId}`);
-                }
+                    } else {
+                        // If time is empty, duration will be set to null in database
+                        duration = null;
+                        console.log(`Removing duration from session ${taskId}`);
+                    }
             }
             
-            // Get existing session to preserve times if not changing
-            const existingSession = tasks.find(t => t.id === taskId);
-            
-            // When updating, use datetime input for start_time and calculate end_time
-            // This ensures start_time and end_time are always saved to the database
-            if (dateTimeValue) {
-                // Convert datetime-local input (local time) to ISO string (UTC)
-                const convertedStartTime = datetimeLocalToISO(dateTimeValue);
-                if (convertedStartTime) {
-                    startTime = convertedStartTime;
-                    const dateTimeObj = new Date(convertedStartTime);
-                    
-                    // Always calculate end_time from start_time + duration
-                    if (duration && duration > 0) {
-                        const endTimeObj = new Date(dateTimeObj.getTime() + duration);
-                        endTime = endTimeObj.toISOString();
-                    } else if (existingSession && existingSession.duration && existingSession.duration > 0) {
-                        // Use existing duration if new duration is not provided
-                        const endTimeObj = new Date(dateTimeObj.getTime() + existingSession.duration);
-                        endTime = endTimeObj.toISOString();
-                    } else if (existingSession && existingSession.end_time) {
-                        // If no duration available, preserve existing end_time
-                        endTime = existingSession.end_time;
-                    }
-                }
-            } else if (existingSession) {
-                // Preserve existing times if datetime input is empty
-                startTime = existingSession.start_time || null;
-                endTime = existingSession.end_time || null;
+            // Parse datetime for start_time if we have a full datetime
+            const dateTimeObj = new Date(dateTimeValue);
+            if (!isNaN(dateTimeObj.getTime())) {
+                startTime = dateTimeObj.toISOString();
             }
             
             const practiceSessionDefinitionId = document.getElementById('quick-task-type').value;
@@ -3258,22 +2898,12 @@ async function handleQuickAddTask(e) {
             const requestBody = {
                 instrument_id: instrumentId,
                 practice_session_definition_id: practiceSessionDefinitionId,
-                // due_date removed - date is extracted from start_time
+                due_date: date,
                 start_time: startTime,
                 end_time: endTime,
                 duration: duration,
                 notes: null
             };
-            
-            // CRITICAL: Ensure start_time and end_time are saved to PracticeSession table
-            // end_time is calculated from start_time + duration to ensure accuracy
-            console.log('Updating session with times (saving to PracticeSession table):', {
-                start_time: startTime,
-                end_time: endTime,
-                duration: duration,
-                datetime_input: dateTimeValue,
-                calculated_end_time: endTime && startTime ? `start_time + ${duration}ms` : 'N/A'
-            });
             
             const response = await fetch(`${API_BASE_URL}/practice-sessions/${taskId}`, {
                 method: 'PUT',
@@ -3317,76 +2947,29 @@ async function handleQuickAddTask(e) {
                 }
                 duration = Math.floor(finalTime);
                 
-                // Calculate start and end times from timer (timer takes precedence)
-                // startTime = when timer started
-                // endTime = startTime + duration (calculated from timer elapsed time)
+                // Calculate start and end times from timer
                 if (timerStartTime) {
                     startTime = new Date(timerStartTime).toISOString();
-                    // Calculate endTime from startTime + duration
-                    // This ensures end_time is always start_time + actual practice duration
-                    if (duration && duration > 0) {
-                        const startTimeObj = new Date(timerStartTime);
-                        const endTimeObj = new Date(startTimeObj.getTime() + duration);
-                        endTime = endTimeObj.toISOString();
-                    } else {
-                        // If no duration yet, use current time as endTime
-                        endTime = new Date().toISOString();
-                    }
+                    endTime = new Date().toISOString();
                 }
             }
             
-            // If no timer was used, use datetime input for start_time
-            // and calculate end_time from start_time + duration
-            if (!startTime && dateTimeValue) {
-                // Convert datetime-local input (local time) to ISO string (UTC)
-                const convertedStartTime = datetimeLocalToISO(dateTimeValue);
-                if (convertedStartTime) {
-                    startTime = convertedStartTime;
-                    const dateTimeObj = new Date(convertedStartTime);
-                    
-                    // If we have a duration, calculate end_time from start_time + duration
-                    if (duration && duration > 0) {
-                        const endTimeObj = new Date(dateTimeObj.getTime() + duration);
-                        endTime = endTimeObj.toISOString();
-                    }
-                }
-            } else if (startTime && duration && duration > 0 && !endTime) {
-                // If we have startTime (from timer) and duration but no endTime, calculate it
-                // This ensures end_time is always saved when we have start_time and duration
-                const startTimeObj = new Date(startTime);
-                const endTimeObj = new Date(startTimeObj.getTime() + duration);
-                endTime = endTimeObj.toISOString();
+            // Parse datetime for start_time if we have a full datetime
+            const dateTimeObj = new Date(dateTimeValue);
+            if (!isNaN(dateTimeObj.getTime())) {
+                startTime = dateTimeObj.toISOString();
             }
-            
-            // CRITICAL: Ensure both start_time and end_time are saved to database when possible
-            // Log what we're sending to verify correctness
-            console.log('Final times being saved to database:', {
-                start_time: startTime,
-                end_time: endTime,
-                duration: duration,
-                timer_was_used: timerStartTime !== null
-            });
             
             const requestBody = {
                 instrument_id: instrumentId,
                 practice_session_definition_id: taskType, // This is now the practice session definition ID
-                // due_date removed - date is extracted from start_time
+                due_date: date,
                 start_time: startTime,
                 end_time: endTime,
                 duration: duration,
                 notes: null
             };
             
-            // CRITICAL: Ensure start_time and end_time are saved to PracticeSession table
-            // end_time is calculated from start_time + duration to ensure accuracy
-            console.log('Creating session with times (saving to PracticeSession table):', {
-                start_time: startTime,
-                end_time: endTime,
-                duration: duration,
-                timer_used: timerStartTime !== null,
-                datetime_input: dateTimeValue,
-                calculated_end_time: endTime && startTime ? `start_time + ${duration}ms` : 'N/A'
-            });
             console.log('Sending request to:', `${API_BASE_URL}/practice-sessions`);
             console.log('Request body:', JSON.stringify(requestBody, null, 2));
             
@@ -3457,55 +3040,20 @@ async function handleQuickAddTask(e) {
 function renderEnhancedTaskCard(task, showActions = true) {
     const instrumentsName = instruments.find(e => e.id === task.instrument_id)?.name || 'Unknown';
     const taskTypeClass = task.task_type.toLowerCase();
-    // Check if overdue using due_date or start_time date
-    const taskDate = getTaskDate(task);
-    const isOverdue = taskDate && taskDate < new Date().toISOString().split('T')[0] && !task.completed;
+    const isOverdue = task.due_date < new Date().toISOString().split('T')[0] && !task.completed;
     const isCompleted = task.completed;
     const hasContributed = hasSessionContributed(task.id);
     const contributedTime = hasContributed ? getSessionContributedTime(task.id) : 0;
     
-    // Format time display using start_time and end_time from database
-    let timeDisplay = '';
-    if (task.start_time && task.end_time) {
-        const startTime = parseUTCToLocal(task.start_time);
-        const endTime = parseUTCToLocal(task.end_time);
-        if (startTime && endTime) {
-            const startStr = startTime.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            });
-            const endStr = endTime.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            });
-            timeDisplay = `${startStr} - ${endStr}`;
-        }
-    } else if (task.start_time) {
-        const startTime = parseUTCToLocal(task.start_time);
-        if (startTime) {
-            timeDisplay = startTime.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            });
-        }
-    } else {
-        timeDisplay = `Date: ${formatDate(task.due_date)}`;
-    }
-    
     return `
         <div class="task-card-enhanced ${isCompleted ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}" 
              draggable="true" ondragstart="handleTaskDrag(event)" 
-             onclick="event.stopPropagation(); openModifySessionModal('${task.id}')"
              data-task-id="${task.id}" data-due-date="${task.due_date}">
             <div class="task-info">
                 <div class="task-instruments">${escapeHtml(instrumentsName)}</div>
                 <span class="task-type ${taskTypeClass}">${escapeHtml(task.task_type)}</span>
                 <div class="task-date ${isOverdue ? 'overdue' : ''}">
-                    ${timeDisplay}
-                    ${isOverdue ? ' ⚠️ Overdue' : ''}
+                    Due: ${formatDate(task.due_date)} ${isOverdue ? '⚠️ Overdue' : ''}
                     ${isCompleted && task.completed_at ? ` • Completed: ${formatDate(task.completed_at.split('T')[0])}` : ''}
                 </div>
                 ${hasContributed ? `<div class="contribution-badge" title="Time logged: ${formatTimerTime(contributedTime)}">
@@ -3515,10 +3063,15 @@ function renderEnhancedTaskCard(task, showActions = true) {
             </div>
             ${showActions ? `
             <div class="task-actions">
-                <button class="btn btn-secondary btn-small btn-icon" onclick="event.stopPropagation(); handleQuickAction('edit', '${task.id}')" title="Edit">
+                ${!isCompleted ? `
+                    <button class="btn btn-success btn-small btn-icon" onclick="handleQuickAction('complete', '${task.id}')" title="Complete">
+                        ✓
+                    </button>
+                ` : ''}
+                <button class="btn btn-secondary btn-small btn-icon" onclick="handleQuickAction('edit', '${task.id}')" title="Edit">
                     ✎
                 </button>
-                <button class="btn btn-danger btn-small btn-icon" onclick="event.stopPropagation(); handleQuickAction('delete', '${task.id}')" title="Delete">
+                <button class="btn btn-danger btn-small btn-icon" onclick="handleQuickAction('delete', '${task.id}')" title="Delete">
                     ×
                 </button>
             </div>
@@ -3529,27 +3082,10 @@ function renderEnhancedTaskCard(task, showActions = true) {
 
 function renderTaskMiniCard(task) {
     const taskTypeClass = task.task_type.toLowerCase();
-    const instrumentsName = instruments.find(e => e.id === task.instrument_id)?.name || 'Unknown';
-    
-    // Format time display if available
-    let timeDisplay = '';
-    if (task.start_time) {
-        const startTime = parseUTCToLocal(task.start_time);
-        if (startTime) {
-            timeDisplay = startTime.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            });
-        }
-    }
-    
     return `<div class="task-mini-card ${taskTypeClass} ${task.completed ? 'completed' : ''}" 
                 draggable="true" ondragstart="handleTaskDrag(event)" 
-                onclick="event.stopPropagation(); openModifySessionModal('${task.id}')"
-                data-task-id="${task.id}" data-due-date="${task.due_date}"
-                title="${escapeHtml(instrumentsName)}${timeDisplay ? ` - ${timeDisplay}` : ''}">
-                ${escapeHtml(instrumentsName.substring(0, 8))}${timeDisplay ? ` ${timeDisplay}` : ''}
+                data-task-id="${task.id}" data-due-date="${task.due_date}">
+                ${task.task_type.substring(0, 3)}
             </div>`;
 }
 
@@ -3563,8 +3099,36 @@ async function handleQuickAction(action, taskId) {
             openCompleteTaskModal(taskId);
             break;
         case 'edit':
-            // Open the same Modify Session modal as clicking the blue bar on calendar
-            openModifySessionModal(taskId);
+            // For practice sessions, editing means rescheduling the date
+            const editNewDate = prompt('Enter new date for this practice session (YYYY-MM-DD):', task.due_date);
+            if (editNewDate) {
+                try {
+                    console.log('Rescheduling task:', taskId, 'to', editNewDate);
+                    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/reschedule`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ due_date: editNewDate })
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Task rescheduled successfully');
+                        await loadTasks();
+                        if (currentView === 'calendar') {
+                            renderCurrentCalendarView();
+                        } else if (currentView === 'tasks') {
+                            const activeTab = document.querySelector('.task-tab.active');
+                            loadTasksForFilter(activeTab.dataset.filter);
+                        }
+                    } else {
+                        const errorText = await response.text();
+                        console.error('Failed to reschedule task:', response.status, errorText);
+                        alert(`Failed to reschedule session: ${response.status} ${response.statusText}\n\n${errorText}`);
+                    }
+                } catch (error) {
+                    console.error('Error rescheduling task:', error);
+                    alert(`Failed to reschedule session: ${error.message}\n\nMake sure the backend server is running at ${API_BASE_URL}`);
+                }
+            }
             break;
         case 'delete':
             if (confirm('Are you sure you want to delete this practice session?')) {
@@ -3823,8 +3387,9 @@ function showTasksForDate(dateStr) {
     const filteredTasks = getFilteredTasks();
     // Normalize date comparison - handle both YYYY-MM-DD and other formats
     const dayTasks = filteredTasks.filter(t => {
-        const taskDate = getTaskDate(t);
-        if (!taskDate) return false;
+        if (!t.due_date) return false;
+        // Normalize the task's due_date to YYYY-MM-DD format
+        const taskDate = t.due_date.split('T')[0]; // Remove time if present
         return taskDate === dateStr;
     });
     
@@ -3835,52 +3400,18 @@ function showTasksForDate(dateStr) {
         return;
     }
     
-    // Sort tasks by start_time if available, otherwise by due_date
-    const sortedDayTasks = [...dayTasks].sort((a, b) => {
-        if (a.start_time && b.start_time) {
-            const dateA = parseUTCToLocal(a.start_time);
-            const dateB = parseUTCToLocal(b.start_time);
-            if (!dateA || !dateB) return 0;
-            return dateA - dateB;
-        } else if (a.start_time) {
-            return -1; // Tasks with start_time come first
-        } else if (b.start_time) {
-            return 1;
-        } else {
-            // Both have no start_time, sort by due_date
-            const dateA = parseUTCToLocal(a.due_date) || new Date(a.due_date);
-            const dateB = parseUTCToLocal(b.due_date) || new Date(b.due_date);
-            return dateA - dateB;
-        }
-    });
-    
-    const pendingTasks = sortedDayTasks.filter(t => !t.completed);
-    const completedTasks = sortedDayTasks.filter(t => t.completed);
+    const pendingTasks = dayTasks.filter(t => !t.completed);
+    const completedTasks = dayTasks.filter(t => t.completed);
     
     let html = `<div class="selected-date-header"><h3>Practice Sessions for ${formatDate(dateStr)}</h3></div>`;
     
     if (pendingTasks.length > 0) {
-        // Group tasks by whether they have time information
-        const tasksWithTime = pendingTasks.filter(t => t.start_time || t.end_time);
-        const tasksWithoutTime = pendingTasks.filter(t => !t.start_time && !t.end_time);
-        
-        if (tasksWithTime.length > 0) {
-            html += `<div class="tasks-section">
-                <h4>Scheduled (${tasksWithTime.length})</h4>
-                <div class="tasks-list-detailed">
-                    ${tasksWithTime.map(task => renderEnhancedTaskCard(task, true)).join('')}
-                </div>
-            </div>`;
-        }
-        
-        if (tasksWithoutTime.length > 0) {
-            html += `<div class="tasks-section">
-                <h4>All Day (${tasksWithoutTime.length})</h4>
-                <div class="tasks-list-detailed">
-                    ${tasksWithoutTime.map(task => renderEnhancedTaskCard(task, true)).join('')}
-                </div>
-            </div>`;
-        }
+        html += `<div class="tasks-section">
+            <h4>Upcoming (${pendingTasks.length})</h4>
+            <div class="tasks-list-detailed">
+                ${pendingTasks.map(task => renderEnhancedTaskCard(task, true)).join('')}
+            </div>
+        </div>`;
     }
     
     if (completedTasks.length > 0 && activeFilters.showCompleted) {
@@ -3921,20 +3452,20 @@ async function loadTasksForFilter(filter) {
     
     if (filter === 'today') {
         filteredTasks = tasks.filter(t => {
-            const taskDate = getTaskDate(t);
-            if (!taskDate) return false;
+            if (!t.due_date) return false;
+            const taskDate = t.due_date.split('T')[0];
             return taskDate === todayStr;
         });
     } else if (filter === 'tomorrow') {
         filteredTasks = tasks.filter(t => {
-            const taskDate = getTaskDate(t);
-            if (!taskDate) return false;
+            if (!t.due_date) return false;
+            const taskDate = t.due_date.split('T')[0];
             return taskDate === tomorrowStr;
         });
     } else if (filter === 'overdue') {
         filteredTasks = tasks.filter(t => {
-            const taskDate = getTaskDate(t);
-            if (!taskDate || t.completed) return false;
+            if (!t.due_date || t.completed) return false;
+            const taskDate = t.due_date.split('T')[0];
             return taskDate < todayStr;
         });
     }
@@ -3957,9 +3488,7 @@ function renderTasks(taskList) {
 function renderTaskCard(task) {
     const instrumentsName = instruments.find(e => e.id === task.instrument_id)?.name || 'Unknown';
     const taskTypeClass = task.task_type.toLowerCase();
-    // Check if overdue using due_date or start_time date
-    const taskDate = getTaskDate(task);
-    const isOverdue = taskDate && taskDate < new Date().toISOString().split('T')[0] && !task.completed;
+    const isOverdue = task.due_date < new Date().toISOString().split('T')[0] && !task.completed;
     
     return `
         <div class="task-card ${task.completed ? 'completed' : ''}">
@@ -4183,9 +3712,7 @@ function calculateTodayPracticeTime() {
     today.setHours(0, 0, 0, 0);
     
     const todayTasks = tasks.filter(task => {
-        const taskDateStr = getTaskDate(task);
-        if (!taskDateStr) return false;
-        const taskDate = new Date(taskDateStr);
+        const taskDate = new Date(task.due_date);
         taskDate.setHours(0, 0, 0, 0);
         return taskDate.getTime() === today.getTime() && task.completed;
     });
@@ -4238,9 +3765,7 @@ function calculateTrainingReadiness() {
         date.setHours(0, 0, 0, 0);
         
         const dayTasks = tasks.filter(task => {
-            const taskDateStr = getTaskDate(task);
-            if (!taskDateStr) return false;
-            const taskDate = new Date(taskDateStr);
+            const taskDate = new Date(task.due_date);
             taskDate.setHours(0, 0, 0, 0);
             return taskDate.getTime() === date.getTime() && task.completed;
         });

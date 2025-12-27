@@ -177,15 +177,13 @@ class PracticeSession(Base):
     id = Column(String, primary_key=True, index=True, default=generate_uuid)  # UUID
     instrument_id = Column(String, ForeignKey("Instrument.id"), nullable=False)  # UUID foreign key
     practice_session_definition_id = Column(String, ForeignKey("PracticeSessionDefinition.id"), nullable=False)  # UUID foreign key
-    due_date = Column(Date, nullable=False, index=True)  # Session date
-    start_time = Column(DateTime, nullable=True)  # When practice started
+    start_time = Column(DateTime, nullable=True, index=True)  # When practice started (used for date filtering)
     end_time = Column(DateTime, nullable=True)  # When practice ended
     duration = Column(Integer, nullable=True)  # Duration in milliseconds
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
     photo_url = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships

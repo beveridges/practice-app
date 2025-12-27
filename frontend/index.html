@@ -19,8 +19,9 @@
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <div id="total-practice-time" class="total-practice-time" style="display: flex; align-items: center; justify-content: center; gap: 1rem; cursor: pointer; flex: 1;" title="Double-click to show reset option">
-                <span id="total-time-display" class="total-time-value">00:00:00</span>
+            <div id="total-practice-time" class="total-practice-time" style="display: flex; align-items: center; justify-content: center; gap: 1rem; cursor: pointer; flex: 1; position: relative;" title="Double-click or long press to show reset option">
+                <img id="gladwell-malcolm-image" src="/img/icons/gladwell-malcolm.svg" alt="Gladwell-Malcolm" style="display: none; height: 80px; width: auto; position: absolute; left: 0; pointer-events: none; max-width: 100px;">
+                <span id="total-time-display" class="total-time-value" style="text-align: center;">00:00:00</span>
                 <button id="reset-total-time-btn" class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2; display: none;" title="Reset total practice time to zero">Reset</button>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -33,6 +34,7 @@
                 <button class="header-profile-btn" data-view="profile" title="Profile">
                     <img src="/img/icons/Profile.png" alt="Profile">
                 </button>
+                <div class="header-bottom-right-ring" title="Click to change time format"></div>
             </div>
         </header>
 
@@ -136,7 +138,7 @@
                 <div class="tasks-view-container">
                     <h2 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
                         <img src="/img/icons/history.png" alt="History" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
-                        Contribution History
+                        Practice History
                     </h2>
                     <div id="contribution-history-content">
                         <div id="contribution-history-loading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -144,7 +146,7 @@
                         </div>
                         <div id="contribution-history-list" style="display: none;"></div>
                         <div id="contribution-history-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No contributions yet</p>
+                            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No history yet</p>
                             <p style="font-size: 0.9rem;">Start a practice session timer to log time!</p>
                         </div>
                     </div>
@@ -289,6 +291,19 @@
                         </div>
                     </div>
                     
+                    <!-- Danger Zone -->
+                    <div class="danger-zone">
+                        <div class="danger-zone-header">Danger Zone</div>
+                        <div class="danger-zone-content">
+                            <div class="danger-zone-item">
+                                <div class="danger-zone-item-content">
+                                    <h4>Reset Total Practice Time</h4>
+                                    <p>Reset all practice session durations to zero. This action cannot be undone.</p>
+                                </div>
+                                <button type="button" class="btn btn-danger" onclick="resetTotalPracticeTime()">Reset Total Time</button>
+                            </div>
+                        </div>
+                    </div>
                     
                     <!-- Legal/Attribution/Credits Link -->
                     <div class="profile-section" style="margin-top: 2rem; text-align: center; padding-top: 2rem; border-top: 1px solid var(--border-color);">
@@ -357,6 +372,9 @@
             <button class="bottom-nav-btn active" data-view="calendar" title="Calendar">
                 <img src="/img/icons/Calendar.png" alt="Calendar" class="bottom-nav-icon" />
             </button>
+            <button class="bottom-nav-add-btn" onclick="createTaskFromCalendar(null)" title="Add Session">
+                <span class="bottom-nav-add-icon">+</span>
+            </button>
             <button class="bottom-nav-btn" data-view="tasks" title="History">
                 <img src="/img/icons/Tasks.png" alt="History" class="bottom-nav-icon" />
             </button>
@@ -383,16 +401,6 @@
                 <datalist id="instrument-name-suggestions">
                     <!-- Options will be populated from user's profile instruments -->
                 </datalist>
-                <select id="instrument-category" required>
-                    <option value="">Select category...</option>
-                    <option value="Woodwind">Woodwind</option>
-                    <option value="Brass">Brass</option>
-                    <option value="Plucked string">Plucked string</option>
-                    <option value="Bowed string">Bowed string</option>
-                    <option value="Percussion">Percussion</option>
-                    <option value="Storage/Case">Storage/Case</option>
-                    <option value="Other">Other</option>
-                </select>
                 <select id="instrument-instrument-type" required>
                     <option value="Primary">Primary Instrument</option>
                     <option value="Secondary">Secondary Instrument</option>
@@ -452,13 +460,13 @@
         </div>
     </div>
 
-    <!-- Contribution History Modal -->
+    <!-- Practice History Modal -->
     <div id="contribution-history-modal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <span class="modal-close">&times;</span>
             <h2 style="display: flex; align-items: center; gap: 0.5rem;">
                 <img src="/img/icons/history.png" alt="History" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
-                Contribution History
+                Practice History
             </h2>
             <div id="contribution-history-content" style="margin-top: 1.5rem;">
                 <div id="contribution-history-loading" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -466,7 +474,7 @@
                 </div>
                 <div id="contribution-history-list" style="display: none;"></div>
                 <div id="contribution-history-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
-                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No contributions yet</p>
+                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No history yet</p>
                     <p style="font-size: 0.9rem;">Start a practice session timer to log time!</p>
                 </div>
             </div>
@@ -523,8 +531,8 @@
                     </div>
                     <!-- Editable time input (shown in Modify mode) -->
                     <div id="editable-time-container" style="display: none; padding: 1rem; background: rgba(52, 199, 89, 0.1); border: 2px solid rgba(52, 199, 89, 0.3); border-radius: 8px;">
-                        <label for="editable-time-input" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--accent-green);">Edit Logged Time:</label>
-                        <input type="text" id="editable-time-input" placeholder="HH:MM:SS" pattern="^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$" style="
+                        <label for="editable-time-input" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--accent-green);">Logged Practice Time:</label>
+                        <input type="text" id="editable-time-input" placeholder="00:00:00.000" pattern="^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])(\.[0-9]{1,3})?$" style="
                             width: 100%;
                             padding: 0.75rem;
                             font-size: 1.5rem;
@@ -539,8 +547,8 @@
                             pointer-events: auto;
                             z-index: 10;
                             position: relative;
-                        " title="Enter time in HH:MM:SS format (e.g., 01:30:45)">
-                        <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); text-align: center;">Format: HH:MM:SS (e.g., 01:30:45 for 1 hour, 30 minutes, 45 seconds)</small>
+                        " title="Enter time in HH:MM:SS.mmm format (e.g., 01:30:45.861)">
+                        <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); text-align: center;">Format: HH:MM:SS.mmm (e.g., 01:30:45.861 for 1 hour, 30 minutes, 45 seconds, 861 milliseconds)</small>
                     </div>
                 </div>
                 <div class="modal-actions">

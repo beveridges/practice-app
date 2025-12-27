@@ -72,6 +72,7 @@ body {
     width: 100%;
     box-sizing: border-box;
     overflow-x: hidden;
+    position: relative;
 }
 
 /* Header */
@@ -88,6 +89,26 @@ body {
     z-index: 100;
     width: 100%;
     box-sizing: border-box;
+    position: relative;
+}
+
+.header-bottom-right-ring {
+    position: absolute;
+    bottom: -50px;
+    right: -2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.6);
+    background: transparent;
+    z-index: 101;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.header-bottom-right-ring:hover {
+    opacity: 0.8;
+    border-color: rgba(255, 255, 255, 0.9);
 }
 
 .app-header h1 {
@@ -117,6 +138,14 @@ body {
     letter-spacing: 2px;
     text-align: center;
     flex: 0 0 auto;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+}
+
+.time-label {
+    font-size: 0.6em;
+    display: inline-block;
 }
 
 .install-btn {
@@ -240,11 +269,15 @@ body {
     width: 100%;
     margin: 0;
     padding: 0;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .view.active {
     display: block;
     width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 /* Status Indicator */
@@ -1197,6 +1230,59 @@ body {
     text-decoration: underline;
 }
 
+/* Danger Zone */
+.danger-zone {
+    margin-top: 2rem;
+    border: 1px solid #DC3545;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface-elevated);
+}
+
+.danger-zone-header {
+    background: #DC3545;
+    color: white;
+    padding: 1rem 1.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.danger-zone-content {
+    padding: 1.5rem;
+}
+
+.danger-zone-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.danger-zone-item:last-child {
+    border-bottom: none;
+}
+
+.danger-zone-item-content {
+    flex: 1;
+}
+
+.danger-zone-item-content h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.danger-zone-item-content p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
 .privacy-link {
     color: var(--primary-color);
     text-decoration: none;
@@ -1874,14 +1960,13 @@ label {
     border-top: 1px solid var(--border-color);
     position: fixed;
     bottom: 0;
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 100;
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
     padding: 0.5rem 0;
     width: 100%;
     max-width: 600px;
-    margin: 0 auto;
     box-sizing: border-box;
 }
 
@@ -1941,6 +2026,42 @@ label {
 /* Ensure main content has padding at bottom to avoid being hidden by bottom nav */
 .app-main {
     padding-bottom: 70px; /* Space for bottom nav */
+}
+
+/* Bottom Nav Add Button (Circular + button) */
+.bottom-nav-add-btn {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.5);
+    margin: -25px 0.5rem 0 0.5rem; /* Negative top margin to extend above nav bar */
+    flex-shrink: 0;
+    z-index: 100; /* Higher z-index to ensure it's on top */
+    position: relative;
+}
+
+.bottom-nav-add-btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 122, 255, 0.7);
+}
+
+.bottom-nav-add-btn:active {
+    transform: scale(0.98);
+}
+
+.bottom-nav-add-icon {
+    font-size: 3.5rem;
+    font-weight: 300;
+    color: white;
+    line-height: 1;
 }
 
 .app-footer {
@@ -2101,6 +2222,26 @@ label {
         grid-template-columns: 1fr;
     }
     
+    /* Mobile Time Display */
+    .total-time-value {
+        font-size: 2rem !important;
+        letter-spacing: 1px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        max-width: 100%;
+    }
+    
+    .total-practice-time {
+        gap: 0.5rem;
+        padding: 0.25rem;
+        min-height: auto;
+    }
+    
+    #gladwell-malcolm-image {
+        height: 50px !important;
+        max-width: 60px;
+    }
+    
     /* Mobile Calendar Optimizations */
     .calendar-view-switcher {
         gap: 0.25rem;
@@ -2223,6 +2364,17 @@ label {
     
     .time-slots-container {
         max-height: 55vh;
+    }
+    
+    /* Tablet Time Display */
+    .total-time-value {
+        font-size: 2.75rem;
+        letter-spacing: 1.5px;
+    }
+    
+    #gladwell-malcolm-image {
+        height: 65px !important;
+        max-width: 75px;
     }
 }
 

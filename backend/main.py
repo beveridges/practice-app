@@ -16,7 +16,7 @@ import json
 import csv
 from io import StringIO
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, text
+from sqlalchemy import and_, or_, text, func
 from database import (
     init_db, get_db, Base, engine, Instrument as DBInstrument, TaskDefinition as DBTaskDefinition,
     TaskOccurrence as DBTaskOccurrence, TaskCompletion as DBTaskCompletion, UserProfile as DBUserProfile,
@@ -170,7 +170,6 @@ class PracticeSession(BaseModel):
     id: Optional[str] = None  # UUID
     instrument_id: str  # UUID
     practice_session_definition_id: str  # UUID
-    due_date: str  # ISO date
     start_time: Optional[str] = None  # ISO datetime
     end_time: Optional[str] = None  # ISO datetime
     duration: Optional[int] = None  # Duration in milliseconds
@@ -178,13 +177,11 @@ class PracticeSession(BaseModel):
     completed_at: Optional[str] = None
     notes: Optional[str] = None
     photo_url: Optional[str] = None
-    created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
 class PracticeSessionCreate(BaseModel):
     instrument_id: str  # UUID
     practice_session_definition_id: str  # UUID
-    due_date: str  # ISO date
     start_time: Optional[str] = None  # ISO datetime
     end_time: Optional[str] = None  # ISO datetime
     duration: Optional[int] = None  # Duration in milliseconds
@@ -314,7 +311,6 @@ def db_practice_session_to_pydantic(db_session: DBPracticeSession) -> PracticeSe
         id=db_session.id,
         instrument_id=db_session.instrument_id,
         practice_session_definition_id=db_session.practice_session_definition_id,
-        due_date=db_session.due_date.isoformat() if db_session.due_date else None,
         start_time=db_session.start_time.isoformat() if db_session.start_time else None,
         end_time=db_session.end_time.isoformat() if db_session.end_time else None,
         duration=db_session.duration,
@@ -322,7 +318,6 @@ def db_practice_session_to_pydantic(db_session: DBPracticeSession) -> PracticeSe
         completed_at=db_session.completed_at.isoformat() if db_session.completed_at else None,
         notes=db_session.notes,
         photo_url=db_session.photo_url,
-        created_at=db_session.created_at.isoformat() if hasattr(db_session, 'created_at') and db_session.created_at else None,
         updated_at=db_session.updated_at.isoformat() if hasattr(db_session, 'updated_at') and db_session.updated_at else None
     )
 
@@ -625,15 +620,23 @@ async def get_tasks(
     query = db.query(DBPracticeSession)
     
     if start_date:
-        query = query.filter(DBPracticeSession.due_date >= date.fromisoformat(start_date))
+        # Filter by start_time date instead of due_date
+        start_date_obj = date.fromisoformat(start_date)
+        query = query.filter(
+            func.date(DBPracticeSession.start_time) >= start_date_obj
+        )
     if end_date:
-        query = query.filter(DBPracticeSession.due_date <= date.fromisoformat(end_date))
+        # Filter by start_time date instead of due_date
+        end_date_obj = date.fromisoformat(end_date)
+        query = query.filter(
+            func.date(DBPracticeSession.start_time) <= end_date_obj
+        )
     if instrument_id:
         query = query.filter(DBPracticeSession.instrument_id == instrument_id)
     if completed is not None:
         query = query.filter(DBPracticeSession.completed == completed)
     
-    sessions = query.order_by(DBPracticeSession.due_date).all()
+    sessions = query.order_by(DBPracticeSession.start_time).all()
     
     # Convert PracticeSession to TaskOccurrence format for backward compatibility
     # Get "Practice General" definition ID for mapping
@@ -643,12 +646,17 @@ async def get_tasks(
     
     result = []
     for session in sessions:
+        # Extract date from start_time for due_date field (backward compatibility)
+        due_date_value = None
+        if session.start_time:
+            due_date_value = session.start_time.date().isoformat()
+        
         # Convert to TaskOccurrence-like format
         result.append({
             "id": session.id,
             "task_definition_id": "",  # Not applicable for PracticeSession
             "instrument_id": session.instrument_id,
-            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "due_date": due_date_value,
             "task_type": "Practice",  # Default to Practice
             "completed": session.completed,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
@@ -676,9 +684,17 @@ async def get_practice_sessions(
     query = db.query(DBPracticeSession)
     
     if start_date:
-        query = query.filter(DBPracticeSession.due_date >= date.fromisoformat(start_date))
+        # Filter by start_time date instead of due_date
+        start_date_obj = date.fromisoformat(start_date)
+        query = query.filter(
+            func.date(DBPracticeSession.start_time) >= start_date_obj
+        )
     if end_date:
-        query = query.filter(DBPracticeSession.due_date <= date.fromisoformat(end_date))
+        # Filter by start_time date instead of due_date
+        end_date_obj = date.fromisoformat(end_date)
+        query = query.filter(
+            func.date(DBPracticeSession.start_time) <= end_date_obj
+        )
     if instrument_id:
         query = query.filter(DBPracticeSession.instrument_id == instrument_id)
     if practice_session_definition_id:
@@ -686,7 +702,7 @@ async def get_practice_sessions(
     if completed is not None:
         query = query.filter(DBPracticeSession.completed == completed)
     
-    sessions = query.order_by(DBPracticeSession.due_date).all()
+    sessions = query.order_by(DBPracticeSession.start_time).all()
     return [db_practice_session_to_pydantic(s) for s in sessions]
 
 @app.post("/api/practice-sessions", response_model=PracticeSession)
@@ -704,16 +720,7 @@ async def create_practice_session(session: PracticeSessionCreate, db: Session = 
     if not practice_def:
         raise HTTPException(status_code=404, detail="Practice session definition not found")
     
-    # Parse dates
-    try:
-        due_date = date.fromisoformat(session.due_date) if session.due_date else date.today()
-    except (ValueError, AttributeError):
-        # If due_date is in datetime format, extract just the date part
-        if session.due_date and 'T' in session.due_date:
-            due_date = date.fromisoformat(session.due_date.split('T')[0])
-        else:
-            due_date = date.today()
-    
+    # Parse start_time and end_time
     start_time = None
     if session.start_time:
         try:
@@ -728,12 +735,11 @@ async def create_practice_session(session: PracticeSessionCreate, db: Session = 
         except (ValueError, AttributeError):
             end_time = None
     
-    # Create new session
+    # Create new session (due_date removed - date extracted from start_time when needed)
     new_session = DBPracticeSession(
         id=generate_uuid(),
         instrument_id=session.instrument_id,
         practice_session_definition_id=session.practice_session_definition_id,
-        due_date=due_date,
         start_time=start_time,
         end_time=end_time,
         duration=session.duration,
@@ -766,16 +772,7 @@ async def update_practice_session(session_id: str, session: PracticeSessionCreat
     if not practice_def:
         raise HTTPException(status_code=404, detail="Practice session definition not found")
     
-    # Parse dates
-    try:
-        due_date = date.fromisoformat(session.due_date) if session.due_date else existing.due_date
-    except (ValueError, AttributeError):
-        # If due_date is in datetime format, extract just the date part
-        if session.due_date and 'T' in session.due_date:
-            due_date = date.fromisoformat(session.due_date.split('T')[0])
-        else:
-            due_date = existing.due_date
-    
+    # Parse start_time and end_time (due_date removed)
     start_time = None
     if session.start_time:
         try:
@@ -790,10 +787,9 @@ async def update_practice_session(session_id: str, session: PracticeSessionCreat
         except (ValueError, AttributeError):
             end_time = existing.end_time
     
-    # Update session
+    # Update session (due_date removed - date extracted from start_time when needed)
     existing.instrument_id = session.instrument_id
     existing.practice_session_definition_id = session.practice_session_definition_id
-    existing.due_date = due_date
     existing.start_time = start_time
     existing.end_time = end_time
     existing.duration = session.duration
@@ -829,15 +825,23 @@ async def get_total_practice_time(db: Session = Depends(get_db)):
 @app.get("/api/tasks/date/{task_date}")
 async def get_tasks_by_date(task_date: str, db: Session = Depends(get_db)):
     """Get all practice sessions for a specific date (legacy endpoint)"""
-    sessions = db.query(DBPracticeSession).filter(DBPracticeSession.due_date == date.fromisoformat(task_date)).all()
+    # Filter by start_time date instead of due_date
+    task_date_obj = date.fromisoformat(task_date)
+    sessions = db.query(DBPracticeSession).filter(
+        func.date(DBPracticeSession.start_time) == task_date_obj
+    ).all()
     # Convert to TaskOccurrence format for backward compatibility
     result = []
     for session in sessions:
+        # Extract date from start_time for due_date field (backward compatibility)
+        due_date_value = None
+        if session.start_time:
+            due_date_value = session.start_time.date().isoformat()
         result.append({
             "id": session.id,
             "task_definition_id": "",
             "instrument_id": session.instrument_id,
-            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "due_date": due_date_value,
             "task_type": "Practice",
             "completed": session.completed,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
@@ -852,20 +856,25 @@ async def get_tasks_by_date(task_date: str, db: Session = Depends(get_db)):
 
 @app.get("/api/tasks/today")
 async def get_tasks_today(db: Session = Depends(get_db)):
-    """Get practice sessions due today (legacy endpoint)"""
+    """Get practice sessions for today (legacy endpoint)"""
     today = date.today()
+    # Filter by start_time date instead of due_date
     sessions = db.query(DBPracticeSession).filter(
-        DBPracticeSession.due_date == today,
+        func.date(DBPracticeSession.start_time) == today,
         DBPracticeSession.completed == False
     ).all()
     # Convert to TaskOccurrence format
     result = []
     for session in sessions:
+        # Extract date from start_time for due_date field (backward compatibility)
+        due_date_value = None
+        if session.start_time:
+            due_date_value = session.start_time.date().isoformat()
         result.append({
             "id": session.id,
             "task_definition_id": "",
             "instrument_id": session.instrument_id,
-            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "due_date": due_date_value,
             "task_type": "Practice",
             "completed": session.completed,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
@@ -880,20 +889,25 @@ async def get_tasks_today(db: Session = Depends(get_db)):
 
 @app.get("/api/tasks/tomorrow")
 async def get_tasks_tomorrow(db: Session = Depends(get_db)):
-    """Get practice sessions due tomorrow (legacy endpoint)"""
+    """Get practice sessions for tomorrow (legacy endpoint)"""
     tomorrow = date.today() + timedelta(days=1)
+    # Filter by start_time date instead of due_date
     sessions = db.query(DBPracticeSession).filter(
-        DBPracticeSession.due_date == tomorrow,
+        func.date(DBPracticeSession.start_time) == tomorrow,
         DBPracticeSession.completed == False
     ).all()
     # Convert to TaskOccurrence format
     result = []
     for session in sessions:
+        # Extract date from start_time for due_date field (backward compatibility)
+        due_date_value = None
+        if session.start_time:
+            due_date_value = session.start_time.date().isoformat()
         result.append({
             "id": session.id,
             "task_definition_id": "",
             "instrument_id": session.instrument_id,
-            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "due_date": due_date_value,
             "task_type": "Practice",
             "completed": session.completed,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
@@ -910,18 +924,23 @@ async def get_tasks_tomorrow(db: Session = Depends(get_db)):
 async def get_tasks_overdue(db: Session = Depends(get_db)):
     """Get overdue practice sessions (legacy endpoint)"""
     today = date.today()
+    # Filter by start_time date instead of due_date
     sessions = db.query(DBPracticeSession).filter(
-        DBPracticeSession.due_date < today,
+        func.date(DBPracticeSession.start_time) < today,
         DBPracticeSession.completed == False
     ).all()
     # Convert to TaskOccurrence format
     result = []
     for session in sessions:
+        # Extract date from start_time for due_date field (backward compatibility)
+        due_date_value = None
+        if session.start_time:
+            due_date_value = session.start_time.date().isoformat()
         result.append({
             "id": session.id,
             "task_definition_id": "",
             "instrument_id": session.instrument_id,
-            "due_date": session.due_date.isoformat() if session.due_date else None,
+            "due_date": due_date_value,
             "task_type": "Practice",
             "completed": session.completed,
             "completed_at": session.completed_at.isoformat() if session.completed_at else None,
@@ -971,8 +990,20 @@ async def reschedule_task(task_id: str, new_date: dict, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Practice session not found")
     
     try:
+        # Update start_time with new date, preserving the time component
         new_due_date = date.fromisoformat(new_date.get('due_date'))
-        session.due_date = new_due_date
+        if session.start_time:
+            # Preserve the time from existing start_time, only change the date
+            old_start = session.start_time
+            new_start_time = datetime.combine(new_due_date, old_start.time())
+            session.start_time = new_start_time
+            # Also update end_time if it exists to maintain duration
+            if session.end_time and session.duration:
+                new_end_time = datetime.combine(new_due_date, session.end_time.time())
+                session.end_time = new_end_time
+        else:
+            # If no start_time, set it to the new date at midnight
+            session.start_time = datetime.combine(new_due_date, datetime.min.time())
         session.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(session)
